@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 
 def flask_baslat():
     """Paneli ayrı thread'de çalıştır."""
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))
+    logger.info(f"Panel port {port} üzerinde başlatılıyor...")
     flask_app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 
