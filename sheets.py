@@ -55,3 +55,19 @@ def kayitlari_getir(tarih: str) -> list:
         if kayit.get("tarih") == tarih:
             kayitlar.append(kayit)
     return kayitlar
+
+
+def tum_kayitlar_getir() -> list:
+    """Panel için tüm kayıtları getirir."""
+    servis, spreadsheet_id = _servis()
+    result = servis.values().get(
+        spreadsheetId=spreadsheet_id,
+        range=f"{SHEET_NAME}!A2:K"
+    ).execute()
+    satirlar = result.get("values", [])
+    kayitlar = []
+    for satir in satirlar:
+        if len(satir) < len(SUTUNLAR):
+            satir.extend([""] * (len(SUTUNLAR) - len(satir)))
+        kayitlar.append(dict(zip(SUTUNLAR, satir)))
+    return kayitlar
