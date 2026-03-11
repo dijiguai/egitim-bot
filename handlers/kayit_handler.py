@@ -6,30 +6,29 @@ import logging
 import re
 from datetime import datetime, date
 from telegram import Update
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram.ext import ContextTypes
 from handlers.egitim_handler import kullanici_durum
 from config import EGITIMLER, GECME_NOTU
 from sheets import sonuc_kaydet
 
 logger = logging.getLogger(__name__)
 
-KIMLIK_DOGRULAMA = 1
+# Kimlik doğrulama bekleyen kullanıcılar
+kimlik_bekleyenler = set()
 
-# Çalışan veritabanı — production'da bu bir dosya veya veritabanı olur
+# Çalışan veritabanı
 # { telegram_user_id: { "ad_soyad": ..., "dogum_tarihi": "15.06.1990", "gorev": ... } }
 CALISANLAR = {
-    # Örnek kayıt — gerçek sistemde bu bir JSON dosyasından veya
-    # Google Sheets'teki "Çalışanlar" sekmesinden okunur
-    # 123456789: {
-    #     "ad_soyad": "Ahmet Yılmaz",
-    #     "dogum_tarihi": "15.06.1990",
-    #     "gorev": "Operatör"
+    # Örnek — kendi ID ve bilgilerini ekle:
+    # 1424268115: {
+    #     "ad_soyad": "Ad Soyad",
+    #     "dogum_tarihi": "GG.AA.YYYY",
+    #     "gorev": "Görev"
     # },
 }
 
 
 def dogum_tarihi_gecerli_mi(metin: str) -> bool:
-    """GG.AA.YYYY formatını kontrol eder."""
     pattern = r"^\d{2}\.\d{2}\.\d{4}$"
     if not re.match(pattern, metin.strip()):
         return False
@@ -40,9 +39,18 @@ def dogum_tarihi_gecerli_mi(metin: str) -> bool:
         return False
 
 
-async def kimlik_dogrula(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kullanıcının yazdığı doğum tarihini doğrular."""
+async def metin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tüm metin mesajlarını yakalar — kimlik doğrulama bekliyorsa işler."""
     user_id = update.effective_user.id
+
+    # Bu kullanıcı sınav tamamladı ve kimlik doğrulama bekleniyor mu?
+    if user_id not in kullanici_durum:
+        return  # Eğitimde değil, yoksay
+
+    durum = kullanici_durum[user_id]
+    if not durum.get("kimlik_bekleniyor"):
+        return  # Henüz sınav bitmedi, yoksay
+
     girilen = update.message.text.strip()
 
     # Format kontrolü
@@ -52,24 +60,19 @@ async def kimlik_dogrula(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "_Örnek: 15.06.1990_",
             parse_mode="Markdown"
         )
-        return KIMLIK_DOGRULAMA  # Tekrar bekle
+        return
 
     # Çalışan kaydı kontrolü
     calisan = CALISANLAR.get(user_id)
-
     if calisan and calisan["dogum_tarihi"] != girilen:
         await update.message.reply_text(
-            "❌ Doğum tarihi eşleşmedi. Lütfen sisteme kayıtlı tarihinizi girin.\n\n"
-            "_3 kez hatalı girişte hesabınız kilitlenir._"
+            "❌ Doğum tarihi eşleşmedi. Tekrar deneyin.\n"
+            "_Örnek format: 15.06.1990_",
+            parse_mode="Markdown"
         )
-        return KIMLIK_DOGRULAMA
+        return
 
-    # ── Sonucu kaydet ──────────────────────────────────────
-    durum = kullanici_durum.get(user_id, {})
-    if not durum:
-        await update.message.reply_text("Oturum bulunamadı. Lütfen tekrar başlayın.")
-        return ConversationHandler.END
-
+    # Sonucu kaydet
     egitim = EGITIMLER[durum["egitim_id"]]
     puan = durum.get("puan", 0)
     gecti = puan >= GECME_NOTU
@@ -79,7 +82,6 @@ async def kimlik_dogrula(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ad_soyad = calisan["ad_soyad"] if calisan else update.effective_user.full_name
     gorev = calisan["gorev"] if calisan else "—"
 
-    # Google Sheets'e kaydet
     kayit = {
         "tarih": bugun,
         "saat": saat,
@@ -91,16 +93,16 @@ async def kimlik_dogrula(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "puan": puan,
         "durum": "GEÇTİ" if gecti else "KALDI",
         "kimlik_dogrulandi": "EVET",
-        "dogum_tarihi_son4": girilen[-4:],  # Sadece yıl kaydedilir — KVKK
+        "dogum_tarihi_son4": girilen[-4:],
     }
 
     try:
         sonuc_kaydet(kayit)
-        logger.info(f"Kayıt başarılı: {ad_soyad} — {puan}p — {'GEÇTİ' if gecti else 'KALDI'}")
+        logger.info(f"Kayıt OK: {ad_soyad} — {puan}p — {'GEÇTİ' if gecti else 'KALDI'}")
     except Exception as e:
-        logger.error(f"Sheets kayıt hatası: {e}")
+        logger.error(f"Sheets hatası: {e}")
 
-    # ── Sonuç mesajı ───────────────────────────────────────
+    # Sonuç mesajı
     if gecti:
         mesaj = (
             f"🎉 *TEBRİKLER — GEÇTİNİZ!*\n\n"
@@ -109,8 +111,7 @@ async def kimlik_dogrula(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📊 Puanınız: *{puan}/100*\n"
             f"🔐 Kimlik: ✅ Doğrulandı\n"
             f"📅 {bugun} · {saat}\n\n"
-            f"✅ *İş başına geçebilirsiniz.*\n\n"
-            f"_Bu kayıt sisteme işlenmiştir._"
+            f"✅ *İş başına geçebilirsiniz.*"
         )
     else:
         mesaj = (
@@ -120,21 +121,15 @@ async def kimlik_dogrula(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📊 Puanınız: *{puan}/100* (Geçme: {GECME_NOTU})\n"
             f"🔐 Kimlik: ✅ Doğrulandı\n"
             f"📅 {bugun} · {saat}\n\n"
-            f"⚠️ *Yüz yüze eğitime alınacaksınız.*\n"
-            f"Lütfen eğitmeninize başvurun.\n\n"
-            f"_Bu kayıt sisteme işlenmiştir._"
+            f"⚠️ *Eğitmeninize başvurun.*"
         )
 
     await update.message.reply_text(mesaj, parse_mode="Markdown")
 
-    # Durumu temizle
+    # Temizle
     kullanici_durum.pop(user_id, None)
-    context.user_data.clear()
-
-    return ConversationHandler.END
 
 
 async def iptal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kullanici_durum.pop(update.effective_user.id, None)
     await update.message.reply_text("İşlem iptal edildi.")
-    return ConversationHandler.END
