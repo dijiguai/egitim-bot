@@ -226,8 +226,8 @@ textarea.form-input{min-height:80px;resize:vertical}
     <div class="modal-sub">Telegram ID'yi öğrenmek için çalışan @userinfobot'a /start yazsın.</div>
     <input type="hidden" id="calisan-edit-id">
     <div class="form-group">
-      <label class="form-label">Telegram ID *</label>
-      <input type="text" class="form-input" id="c-tid" placeholder="örn: 123456789">
+      <label class="form-label">Telegram ID <span style="color:var(--muted);font-weight:400">(opsiyonel)</span></label>
+      <input type="text" class="form-input" id="c-tid" placeholder="Boş bırakabilirsiniz — sistem doğum tarihiyle eşleştirir">
     </div>
     <div class="form-group">
       <label class="form-label">Ad Soyad *</label>
@@ -449,7 +449,7 @@ async function calisanKaydet() {
   const dogum = document.getElementById('c-dogum').value.trim();
   const hataEl = document.getElementById('calisan-hata');
 
-  if(!tid||!ad||!gorev||!dogum){hataEl.textContent='Tüm alanları doldurun.';hataEl.style.display='block';return;}
+  if(!ad||!gorev||!dogum){hataEl.textContent='Ad, görev ve doğum tarihi zorunludur.';hataEl.style.display='block';return;}
   if(!/^\d{2}\.\d{2}\.\d{4}$/.test(dogum)){hataEl.textContent='Doğum tarihi GG.AA.YYYY formatında olmalı.';hataEl.style.display='block';return;}
 
   const endpoint = editId ? '/panel/api/calisan-guncelle' : '/panel/api/calisan-ekle';
