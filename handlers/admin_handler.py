@@ -17,30 +17,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if admin_mi(user.id):
         await update.message.reply_text(
-            f"👋 Merhaba *{user.first_name}*!\n\n"
-            f"🛠 *Admin Komutları:*\n"
-            f"/egitim\\_gonder [id] — Eğitim gönder\n"
-            f"/rapor — Bugünkü özet\n"
-            f"/kalanlar — Eğitim almamışlar\n"
-            f"/izin\\_ekle [tid] [tarih] — İzin ekle\n"
-            f"/izin\\_kaldir [tid] [tarih] — İzin kaldır\n"
-            f"/izinliler — Bugün izinliler\n"
-            f"/eksik — Eksik eğitim özeti\n"
-            f"/hizli\\_ekle [tid] [gorev] [dogum] — Hızlı ekle\n"
-            f"/bekleyenler — Onay bekleyen üyeler\n"
-            f"/yardim — Tüm komutlar",
+            f"👋 Merhaba *{user.first_name}*! Admin panelindesiniz.\n\n"
+            f"Tüm komutlar için /yardim",
             parse_mode="Markdown"
         )
     else:
         await update.message.reply_text(
-            f"👋 Merhaba *{user.first_name}*!\n\n"
-            f"Eğitim sisteminize hoş geldiniz. "
+            f"👋 Merhaba *{user.first_name}*!\n"
             f"Bugünkü eğitim hazır olduğunda bildirim alacaksınız.",
             parse_mode="Markdown"
         )
 
 
 async def egitim_gonder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Manuel eğitim gönder — aynı zamanda eğitimi 'açık' yapar."""
     if not admin_mi(update.effective_user.id):
         await update.message.reply_text("⛔ Yetkiniz yok.")
         return
@@ -50,7 +40,7 @@ async def egitim_gonder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         liste = "\n".join([f"• `{k}` — {v['baslik']}" for k, v in EGITIMLER.items()])
         await update.message.reply_text(
             f"📋 *Mevcut Eğitimler:*\n\n{liste}\n\n"
-            f"Kullanım: `/egitim_gonder [egitim_id]`",
+            f"Kullanım: `/egitim_gonder [id]`",
             parse_mode="Markdown"
         )
         return
@@ -61,31 +51,30 @@ async def egitim_gonder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ '{egitim_id}' bulunamadı.")
         return
 
+    from durum import aktif_egitim_set
+    aktif_egitim_set(egitim_id)
+
     keyboard = [[InlineKeyboardButton("▶️ Eğitime Başla", callback_data=f"egitim_baslat:{egitim_id}")]]
     markup = InlineKeyboardMarkup(keyboard)
 
-    # Gruba gönder
     if GRUP_ID and GRUP_ID != 0:
         try:
             await context.bot.send_message(
                 chat_id=GRUP_ID,
-                text=f"📋 *{egitim['baslik']}* eğitimi başladı!\n\nKatılmak için butona basın 👇",
-                parse_mode="Markdown",
-                reply_markup=markup
+                text=f"📋 *{egitim['baslik']}* eğitimi başladı!\n\nKatılmak için 👇",
+                parse_mode="Markdown", reply_markup=markup
             )
         except Exception as e:
             logger.error(f"Grup mesajı hatası: {e}")
 
-    # Çalışanlara kişisel gönder
-    calisanlar = tum_calisanlar()
     import asyncio
+    calisanlar = tum_calisanlar()
     for uid, c in calisanlar.items():
         try:
             await context.bot.send_message(
                 chat_id=uid,
-                text=f"📋 Yeni eğitim: *{egitim['baslik']}*\n\nBaşlamak için butona basın 👇",
-                parse_mode="Markdown",
-                reply_markup=markup
+                text=f"📋 Yeni eğitim: *{egitim['baslik']}*\n\nBaşlamak için 👇",
+                parse_mode="Markdown", reply_markup=markup
             )
             await asyncio.sleep(0.1)
         except Exception as e:
@@ -94,22 +83,79 @@ async def egitim_gonder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ *{egitim['baslik']}* gönderildi.", parse_mode="Markdown")
 
 
-async def rapor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def egitim_tekrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /egitim_tekrar [telegram_id] — Kalan çalışana bugünkü eğitimi tekrar açar.
+    """
     if not admin_mi(update.effective_user.id):
         await update.message.reply_text("⛔ Yetkiniz yok.")
         return
+
+    args = context.args
+    if not args:
+        await update.message.reply_text(
+            "Kullanım: `/egitim_tekrar [telegram_id]`\n"
+            "Bugünkü eğitimi o çalışana tekrar açar.",
+            parse_mode="Markdown"
+        )
+        return
+
+    try:
+        tid = int(args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Geçersiz ID.")
+        return
+
+    from durum import gunun_egitim_id, tekrar_izni_ver, aktif_egitim_set
+    egitim_id = gunun_egitim_id()
+
+    if not egitim_id:
+        await update.message.reply_text("❌ Bugün aktif eğitim yok.")
+        return
+
+    egitim = EGITIMLER.get(egitim_id)
+    calisan = tum_calisanlar().get(tid)
+    if not calisan:
+        await update.message.reply_text("❌ Çalışan bulunamadı.")
+        return
+
+    # Eğitimi tekrar açık yap
+    aktif_egitim_set(egitim_id)
+    # Tamamlanmış kaydından kaldır (tekrar girebilsin)
+    tekrar_izni_ver(tid, egitim_id)
+
+    keyboard = [[InlineKeyboardButton("▶️ Eğitime Başla", callback_data=f"egitim_baslat:{egitim_id}")]]
+    markup = InlineKeyboardMarkup(keyboard)
+
+    try:
+        await context.bot.send_message(
+            chat_id=tid,
+            text=(
+                f"📋 Yöneticiniz bugünkü eğitimi tekrar almanız için açtı.\n\n"
+                f"*{egitim['baslik']}*\n\nBaşlamak için 👇"
+            ),
+            parse_mode="Markdown", reply_markup=markup
+        )
+        await update.message.reply_text(
+            f"✅ *{calisan['ad_soyad']}* için eğitim tekrar açıldı.",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Mesaj gönderilemedi: {e}")
+
+
+async def rapor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not admin_mi(update.effective_user.id): return
     from sheets import kayitlari_getir
-    from datetime import date as d
-    bugun = d.today().strftime("%d.%m.%Y")
+    from datetime import date
+    bugun = date.today().strftime("%d.%m.%Y")
     try:
         kayitlar = kayitlari_getir(bugun, bugun)
         gecti = [k for k in kayitlar if k.get("durum") == "GEÇTİ"]
         kaldi = [k for k in kayitlar if k.get("durum") == "KALDI"]
         await update.message.reply_text(
             f"📊 *{bugun} Raporu*\n\n"
-            f"✅ Geçti: {len(gecti)}\n"
-            f"❌ Kaldı: {len(kaldi)}\n"
-            f"📋 Toplam: {len(kayitlar)}",
+            f"✅ Geçti: {len(gecti)}\n❌ Kaldı: {len(kaldi)}\n📋 Toplam: {len(kayitlar)}",
             parse_mode="Markdown"
         )
     except Exception as e:
@@ -117,24 +163,23 @@ async def rapor(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def kalanlar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not admin_mi(update.effective_user.id):
-        await update.message.reply_text("⛔ Yetkiniz yok.")
-        return
+    if not admin_mi(update.effective_user.id): return
     from sheets import kayitlari_getir
-    from datetime import date as d
-    bugun = d.today().strftime("%d.%m.%Y")
+    from datetime import date
+    bugun = date.today().strftime("%d.%m.%Y")
     calisanlar = tum_calisanlar()
     try:
         kayitlar = kayitlari_getir(bugun, bugun)
-        katilan_idler = {k.get("telegram_id") for k in kayitlar}
-        kalanlar_list = [
-            f"• {c['ad_soyad']} ({c['gorev']})"
+        katilan = {k.get("telegram_id") for k in kayitlar}
+        liste = [
+            f"• {c['ad_soyad']} ({c['gorev']}) — /egitim\\_tekrar {uid}"
             for uid, c in calisanlar.items()
-            if str(uid) not in katilan_idler
+            if str(uid) not in katilan
         ]
-        if kalanlar_list:
+        if liste:
             await update.message.reply_text(
-                f"⏳ *Bugün Eğitim Almayan Çalışanlar:*\n\n" + "\n".join(kalanlar_list),
+                f"⏳ *Bugün Eğitim Almayan Çalışanlar:*\n\n" + "\n".join(liste) + 
+                f"\n\nTekrar açmak için komuta tıklayın.",
                 parse_mode="Markdown"
             )
         else:
@@ -144,11 +189,11 @@ async def kalanlar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def yardim(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not admin_mi(update.effective_user.id):
-        return
+    if not admin_mi(update.effective_user.id): return
     await update.message.reply_text(
-        "📖 *Tüm Admin Komutları:*\n\n"
+        "📖 *Admin Komutları:*\n\n"
         "/egitim\\_gonder [id] — Manuel eğitim gönder\n"
+        "/egitim\\_tekrar [tid] — Çalışana tekrar al\n"
         "/rapor — Bugünkü özet\n"
         "/kalanlar — Eğitim almayan çalışanlar\n"
         "/izin\\_ekle [tid] [tarih] — İzin ekle\n"
@@ -156,39 +201,29 @@ async def yardim(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/izinliler — Bugün izinliler\n"
         "/eksik — Eksik eğitim özeti\n"
         "/hizli\\_ekle [tid] [gorev] [dogum] — Hızlı çalışan ekle\n"
-        "/bekleyenler — Onay bekleyen üyeler\n",
+        "/bekleyenler — Onay bekleyen üyeler",
         parse_mode="Markdown"
     )
 
 
 async def hizli_ekle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    /hizli_ekle 123456789 Operatör 15.06.1990
-    Telegram adını otomatik alır, görev ve doğum tarihini siz girin.
-    """
-    if not admin_mi(update.effective_user.id):
-        await update.message.reply_text("⛔ Yetkiniz yok.")
-        return
-
+    if not admin_mi(update.effective_user.id): return
     args = context.args
     if len(args) < 3:
         await update.message.reply_text(
-            "Kullanım: `/hizli_ekle [telegram_id] [gorev] [GG.AA.YYYY]`\n"
-            "Örnek: `/hizli_ekle 123456789 Operatör 15.06.1990`",
+            "Kullanım: `/hizli_ekle [telegram_id] [gorev] [GG.AA.YYYY]`",
             parse_mode="Markdown"
         )
         return
-
     try:
         tid = int(args[0])
     except ValueError:
-        await update.message.reply_text("❌ Geçersiz Telegram ID.")
+        await update.message.reply_text("❌ Geçersiz ID.")
         return
 
     gorev = args[1]
     dogum = args[2]
 
-    # Onay bekleyenlerden adı al
     from handlers.kayit_handler import onay_bekleyenler
     bilgi = onay_bekleyenler.pop(tid, {})
     ad = bilgi.get("ad", f"Çalışan {tid}")
@@ -197,30 +232,20 @@ async def hizli_ekle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     calisan_ekle(tid, ad, dogum, gorev)
 
     await update.message.reply_text(
-        f"✅ *{ad}* sisteme eklendi!\n\n"
-        f"Telegram ID: `{tid}`\n"
-        f"Görev: {gorev}\n"
-        f"Doğum: {dogum}",
+        f"✅ *{ad}* sisteme eklendi!\nID: `{tid}` · Görev: {gorev}",
         parse_mode="Markdown"
     )
 
 
 async def bekleyenler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Onay bekleyen üyeleri listele."""
-    if not admin_mi(update.effective_user.id):
-        return
-
+    if not admin_mi(update.effective_user.id): return
     from handlers.kayit_handler import onay_bekleyenler
     if not onay_bekleyenler:
         await update.message.reply_text("✅ Onay bekleyen kimse yok.")
         return
-
-    satirlar = []
-    for tid, bilgi in onay_bekleyenler.items():
-        satirlar.append(f"• *{bilgi['ad']}* {bilgi['username']}\n  ID: `{tid}`")
-
+    satirlar = [f"• *{b['ad']}* {b['username']}\n  ID: `{tid}`" for tid, b in onay_bekleyenler.items()]
     await update.message.reply_text(
-        "👥 *Onay Bekleyen Üyeler:*\n\n" + "\n\n".join(satirlar) + "\n\n"
-        "Eklemek için: `/hizli_ekle [id] [gorev] [dogum]`",
+        "👥 *Onay Bekleyenler:*\n\n" + "\n\n".join(satirlar) +
+        "\n\nEklemek: `/hizli_ekle [id] [gorev] [dogum]`",
         parse_mode="Markdown"
     )
