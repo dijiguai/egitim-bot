@@ -6,7 +6,7 @@ GECME_NOTU = 70
 ADMIN_IDS = [1424268115]
 
 # Telegram grup ID
-GRUP_ID = 0  # Gruba bot eklenince /grup_id komutuyla ogrenilir
+GRUP_ID = -5162987964  # Telegram grup ID
 
 # Calisanlar { telegram_id: { ad_soyad, dogum_tarihi, gorev } }
 CALISANLAR = {
