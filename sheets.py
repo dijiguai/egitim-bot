@@ -10,12 +10,12 @@ from googleapiclient.discovery import build
 logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SHEET_NAME = "Sayfa1"  # Google Sheets'te sekme adı — varsayılan "Sayfa1"
+SHEET_NAME = "Sayfa1"
 
 SUTUNLAR = [
     "tarih", "saat", "ad_soyad", "telegram_id",
     "gorev", "egitim_konusu", "egitim_turu",
-    "puan", "durum", "kimlik_dogrulandi", "dogum_tarihi_son4"
+    "puan", "durum", "kimlik_dogrulandi", "dogum_yili"
 ]
 
 
@@ -27,7 +27,8 @@ def _servis():
     return service, spreadsheet_id
 
 
-def sonuc_kaydet(kayit: dict):
+def kayit_ekle(kayit: dict):
+    """Yeni kayıt ekle — kayit_handler tarafından çağrılır."""
     satir = [str(kayit.get(s, "")) for s in SUTUNLAR]
     servis, spreadsheet_id = _servis()
     servis.values().append(
@@ -40,34 +41,34 @@ def sonuc_kaydet(kayit: dict):
     logger.info(f"Sheets'e yazıldı: {kayit.get('ad_soyad')} — {kayit.get('durum')}")
 
 
-def kayitlari_getir(tarih: str) -> list:
-    servis, spreadsheet_id = _servis()
-    result = servis.values().get(
-        spreadsheetId=spreadsheet_id,
-        range=f"{SHEET_NAME}!A2:K"
-    ).execute()
-    satirlar = result.get("values", [])
-    kayitlar = []
-    for satir in satirlar:
-        if len(satir) < len(SUTUNLAR):
-            satir.extend([""] * (len(SUTUNLAR) - len(satir)))
-        kayit = dict(zip(SUTUNLAR, satir))
-        if kayit.get("tarih") == tarih:
-            kayitlar.append(kayit)
-    return kayitlar
+# Geriye dönük uyumluluk
+sonuc_kaydet = kayit_ekle
+
+
+def kayitlari_getir(bas: str = "", bitis: str = "") -> list:
+    """Tarih aralığına göre kayıt getir."""
+    return [
+        k for k in tum_kayitlar_getir()
+        if (not bas or k.get("tarih", "") >= bas) and
+           (not bitis or k.get("tarih", "") <= bitis)
+    ]
 
 
 def tum_kayitlar_getir() -> list:
     """Panel için tüm kayıtları getirir."""
-    servis, spreadsheet_id = _servis()
-    result = servis.values().get(
-        spreadsheetId=spreadsheet_id,
-        range=f"{SHEET_NAME}!A2:K"
-    ).execute()
-    satirlar = result.get("values", [])
-    kayitlar = []
-    for satir in satirlar:
-        if len(satir) < len(SUTUNLAR):
-            satir.extend([""] * (len(SUTUNLAR) - len(satir)))
-        kayitlar.append(dict(zip(SUTUNLAR, satir)))
-    return kayitlar
+    try:
+        servis, spreadsheet_id = _servis()
+        result = servis.values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f"{SHEET_NAME}!A2:K"
+        ).execute()
+        satirlar = result.get("values", [])
+        kayitlar = []
+        for satir in satirlar:
+            if len(satir) < len(SUTUNLAR):
+                satir.extend([""] * (len(SUTUNLAR) - len(satir)))
+            kayitlar.append(dict(zip(SUTUNLAR, satir)))
+        return kayitlar
+    except Exception as e:
+        logger.error(f"Sheets okuma hatası: {e}")
+        return []
