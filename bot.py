@@ -25,7 +25,10 @@ def main():
     app = Application.builder().token(TOKEN).build()
     zamanlayici_baslat(app)
 
-    app.add_handler(CommandHandler("start", admin_handler.start))
+    # /start — hem admin hem çalışan için
+    app.add_handler(CommandHandler("start", kayit_handler.start_handler))
+
+    # Admin komutları
     app.add_handler(CommandHandler("egitim_gonder", admin_handler.egitim_gonder))
     app.add_handler(CommandHandler("egitim_tekrar", admin_handler.egitim_tekrar))
     app.add_handler(CommandHandler("rapor", admin_handler.rapor))
@@ -37,7 +40,11 @@ def main():
     app.add_handler(CommandHandler("izin_kaldir", izin_handler.izin_kaldir_cmd))
     app.add_handler(CommandHandler("izinliler", izin_handler.izinliler_cmd))
     app.add_handler(CommandHandler("eksik", izin_handler.eksik_cmd))
+
+    # Butonlar
     app.add_handler(CallbackQueryHandler(egitim_handler.buton_handler))
+
+    # Metin mesajları
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, kayit_handler.metin_handler))
 
     logger.info("Bot başlatılıyor...")
