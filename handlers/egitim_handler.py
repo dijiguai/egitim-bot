@@ -29,22 +29,18 @@ async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if data.startswith("egitim_baslat:"):
-            egitim_id = data.split(":")[1]
-            await egitim_baslat(update, context, user_id, egitim_id)
+            await egitim_baslat(update, context, user_id, data.split(":")[1])
             return
 
         if data.startswith("cevap:"):
-            parcalar = data.split(":")
-            await cevap_isle(update, context, user_id, int(parcalar[1]), int(parcalar[2]))
+            p = data.split(":")
+            await cevap_isle(update, context, user_id, int(p[1]), int(p[2]))
             return
 
     except Exception as e:
-        logger.error(f"Buton handler hatası: {e}", exc_info=True)
+        logger.error(f"Buton hatası: {e}", exc_info=True)
         try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="⚠️ Bir hata oluştu, lütfen tekrar deneyin."
-            )
+            await context.bot.send_message(chat_id=user_id, text="⚠️ Bir hata oluştu, tekrar deneyin.")
         except:
             pass
 
@@ -55,7 +51,7 @@ async def egitim_baslat(update, context, user_id, egitim_id):
         await context.bot.send_message(chat_id=user_id, text="❌ Eğitim bulunamadı.")
         return
 
-    # Çalışanı bul — hata olursa yine de devam et
+    # Önce Telegram ID ile ara
     try:
         from calisanlar import calisan_bul
         calisan = calisan_bul(user_id)
@@ -63,43 +59,47 @@ async def egitim_baslat(update, context, user_id, egitim_id):
         logger.error(f"calisan_bul hatası: {e}")
         calisan = None
 
-    if not calisan:
+    if calisan:
+        # Kayıtlı — direkt başlat
+        _sinavi_baslat(user_id, egitim_id, egitim, calisan_bilindi=True)
+        await context.bot.send_message(
+            chat_id=user_id, text=egitim["metin"], parse_mode="Markdown"
+        )
+        await soru_gonder(context, user_id, 0, egitim["sorular"])
+    else:
+        # Kayıtlı değil — doğum tarihiyle doğrula
+        kullanici_durum[user_id] = {
+            "egitim_id": egitim_id,
+            "sorular": egitim["sorular"],
+            "soru_idx": 0,
+            "dogru_sayisi": 0,
+            "kimlik_bekleniyor": False,
+            "dogum_dogrulama": True,  # Önce doğum tarihi sor
+            "kimlik_dogrulandi": False,
+            "kimlik_deneme": 0
+        }
         await context.bot.send_message(
             chat_id=user_id,
             text=(
-                "⛔ Sisteme kayıtlı değilsiniz.\n\n"
-                "Yöneticinizden sizi panelden eklemesini isteyin."
-            )
+                f"📋 *{egitim['baslik']}* eğitimine hoş geldiniz!\n\n"
+                f"Başlamak için doğum tarihinizi girin *(GG.AA.YYYY)*:\n"
+                f"_(örn: 15.06.1990)_"
+            ),
+            parse_mode="Markdown"
         )
-        return
 
-    # Zaten aktif sınavı var mı?
-    mevcut = kullanici_durum.get(user_id, {})
-    if mevcut.get("egitim_id") and not mevcut.get("kimlik_bekleniyor"):
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="⚠️ Devam eden bir sınavınız var. Lütfen tamamlayın."
-        )
-        return
 
-    # Sınavı başlat
+def _sinavi_baslat(user_id, egitim_id, egitim, calisan_bilindi=False):
     kullanici_durum[user_id] = {
         "egitim_id": egitim_id,
         "sorular": egitim["sorular"],
         "soru_idx": 0,
         "dogru_sayisi": 0,
         "kimlik_bekleniyor": False,
-        "kimlik_dogrulandi": False,
+        "dogum_dogrulama": False,
+        "kimlik_dogrulandi": True,
         "kimlik_deneme": 0
     }
-
-    await context.bot.send_message(
-        chat_id=user_id,
-        text=egitim["metin"],
-        parse_mode="Markdown"
-    )
-
-    await soru_gonder(context, user_id, 0, egitim["sorular"])
 
 
 async def soru_gonder(context, user_id, idx, sorular):
@@ -121,11 +121,7 @@ async def soru_gonder(context, user_id, idx, sorular):
 
 async def cevap_isle(update, context, user_id, soru_idx, secim):
     durum = kullanici_durum.get(user_id)
-    if not durum:
-        await context.bot.send_message(chat_id=user_id, text="❌ Oturum sona erdi. Tekrar başlayın.")
-        return
-
-    if soru_idx != durum["soru_idx"]:
+    if not durum or soru_idx != durum["soru_idx"]:
         return
 
     sorular = durum["sorular"]
@@ -136,7 +132,7 @@ async def cevap_isle(update, context, user_id, soru_idx, secim):
         durum["dogru_sayisi"] += 1
         geri = "✅ *Doğru!*"
     else:
-        geri = f"❌ *Yanlış.* Doğru cevap: {harf[dogru]}) {sorular[soru_idx]['secenekler'][dogru]}"
+        geri = f"❌ *Yanlış.* Doğru: {harf[dogru]}) {sorular[soru_idx]['secenekler'][dogru]}"
 
     try:
         await update.callback_query.edit_message_text(
@@ -153,14 +149,16 @@ async def cevap_isle(update, context, user_id, soru_idx, secim):
     if sonraki < len(sorular):
         await soru_gonder(context, user_id, sonraki, sorular)
     else:
-        durum["kimlik_bekleniyor"] = True
-        kullanici_durum[user_id] = durum
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=(
-                "✅ *Tüm sorular tamamlandı!*\n\n"
-                "Sonucunuzu kaydetmek için kimlik doğrulaması gerekiyor.\n\n"
-                "📅 Doğum tarihinizi girin *(GG.AA.YYYY)*:"
-            ),
-            parse_mode="Markdown"
-        )
+        # Sınav bitti — kimlik doğrulama (eğer daha önce yapılmadıysa)
+        if not durum.get("kimlik_dogrulandi"):
+            durum["kimlik_bekleniyor"] = True
+            kullanici_durum[user_id] = durum
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="✅ *Sorular tamamlandı!*\n\n📅 Doğum tarihinizi girin *(GG.AA.YYYY)*:",
+                parse_mode="Markdown"
+            )
+        else:
+            # Kimlik zaten doğrulandı — direkt kaydet
+            from handlers.kayit_handler import sinav_tamamla_direkt
+            await sinav_tamamla_direkt(context, user_id, durum)
