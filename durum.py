@@ -1,89 +1,180 @@
 """
-E�itim sırası ve izin yönetimi — durum.json ile saklanır
+Otomatik zamanlayıcı
+- 08:00 → eğitim başlat (gruba + kişilere mesaj)
+- 17:00 → eğitimi kapat (gruba kapanış mesajı)
 """
 
-import json
-import os
 import logging
-from datetime import date
+import asyncio
+import time
+import threading
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
-DURUM_DOSYA = "durum.json"
+
+try:
+    import pytz
+    TURKIYE_TZ = pytz.timezone("Europe/Istanbul")
+    def simdi_tr():
+        return datetime.now(TURKIYE_TZ).replace(tzinfo=None)
+except ImportError:
+    def simdi_tr():
+        return datetime.utcnow() + timedelta(hours=3)
 
 
-def _oku() -> dict:
-    if os.path.exists(DURUM_DOSYA):
+async def egitim_baslat(app):
+    """08:00 — eğitimi başlat."""
+    from config import GRUP_ID
+    from calisanlar import tum_calisanlar
+    from durum import siradaki_egitim_al, izinli_mi, aktif_egitim_set
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    simdi = simdi_tr()
+    gun = simdi.weekday()
+    if gun == 6:  # Pazar
+        logger.info("Pazar — eğitim yok.")
+        return
+
+    egitim_id, egitim = siradaki_egitim_al()
+    if not egitim:
+        logger.error("Eğitim bulunamadı.")
+        return
+
+    # Aktif eğitimi kaydet
+    aktif_egitim_set(egitim_id)
+
+    bugun = simdi.strftime("%d.%m.%Y")
+    gunler = ["Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi","Pazar"]
+
+    keyboard = [[InlineKeyboardButton("▶️ Eğitime Başla", callback_data=f"egitim_baslat:{egitim_id}")]]
+    markup = InlineKeyboardMarkup(keyboard)
+
+    grup_metin = (
+        f"🔔 *{gunler[gun]} {bugun} — Günün Eğitimi*\n\n"
+        f"📋 *{egitim['baslik']}*\n"
+        f"🏷 Tür: {egitim['tur']} · ⏱ {egitim['sure']}\n"
+        f"✅ Geçme notu: 70/100\n\n"
+        f"⏰ Eğitim *saat 17:00*'ye kadar açık.\n"
+        f"İşe başlamadan önce tamamlayın 👇"
+    )
+
+    if GRUP_ID and GRUP_ID != 0:
         try:
-            with open(DURUM_DOSYA, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            pass
-    return {"egitim_index": 0, "son_tarih": "", "izinler": {}, "tamamlananlar": {}}
+            msg = await app.bot.send_message(
+                chat_id=GRUP_ID, text=grup_metin,
+                parse_mode="Markdown", reply_markup=markup
+            )
+            # Mesaj ID'sini kaydet (akşam güncellemek için)
+            aktif_egitim_set(egitim_id, grup_mesaj_id=msg.message_id)
+            logger.info(f"Grup mesajı gönderildi: {egitim['baslik']}")
+        except Exception as e:
+            logger.error(f"Grup mesajı hatası: {e}")
+
+    # Kişisel bildirimler
+    calisanlar = tum_calisanlar()
+    for user_id, calisan in calisanlar.items():
+        if izinli_mi(user_id, bugun):
+            logger.info(f"{calisan['ad_soyad']} izinli — atlandı.")
+            continue
+        try:
+            ad = calisan['ad_soyad'].split()[0]
+            await app.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    f"👷 Günaydın *{ad}*!\n\n"
+                    f"Bugünkü eğitim: *{egitim['baslik']}*\n"
+                    f"⏰ Saat 17:00'ye kadar tamamlamanız gerekiyor 👇"
+                ),
+                parse_mode="Markdown", reply_markup=markup
+            )
+            await asyncio.sleep(0.1)
+        except Exception as e:
+            logger.warning(f"{calisan['ad_soyad']} bildirimi gönderilemedi: {e}")
 
 
-def _yaz(d: dict):
-    with open(DURUM_DOSYA, "w", encoding="utf-8") as f:
-        json.dump(d, f, ensure_ascii=False, indent=2)
+async def egitim_kapat(app):
+    """17:00 — eğitimi kapat, tamamlamayanları bildir."""
+    from config import GRUP_ID
+    from calisanlar import tum_calisanlar
+    from durum import aktif_egitim_al, aktif_egitim_temizle, bugun_tamamlayanlar
+    from sheets import kayitlari_getir
+    from datetime import date
 
+    durum = aktif_egitim_al()
+    if not durum:
+        return
 
-def siradaki_egitim_al():
-    from config import EGITIMLER
-    d = _oku()
-    liste = list(EGITIMLER.keys())
-    if not liste:
-        return None, None
-
+    egitim_id = durum.get("egitim_id")
     bugun = date.today().strftime("%d.%m.%Y")
 
-    if d.get("son_tarih") == bugun:
-        onceki = (d.get("egitim_index", 0) - 1) % len(liste)
-        eid = liste[onceki]
-        return eid, EGITIMLER[eid]
+    # Bugün tamamlayanları bul
+    tamamlayanlar = bugun_tamamlayanlar(bugun)
+    calisanlar = tum_calisanlar()
 
-    idx = d.get("egitim_index", 0) % len(liste)
-    eid = liste[idx]
-    d["egitim_index"] = (idx + 1) % len(liste)
-    d["son_tarih"] = bugun
-    _yaz(d)
-    logger.info(f"Eğitim sırası: {eid} ({idx + 1}/{len(liste)})")
-    return eid, EGITIMLER[eid]
+    tamamlamayan = [
+        c["ad_soyad"]
+        for uid, c in calisanlar.items()
+        if str(uid) not in tamamlayanlar
+    ]
 
+    # Gruba kapanış mesajı
+    if GRUP_ID and GRUP_ID != 0:
+        try:
+            metin = f"🔒 *Bugünkü eğitim sona erdi.*\n\n"
+            if tamamlamayan:
+                metin += f"⚠️ Eğitimi tamamlamamış çalışanlar:\n"
+                metin += "\n".join([f"• {ad}" for ad in tamamlamayan])
+                metin += f"\n\nYönetici gerekli görürse tekrar açabilir."
+            else:
+                metin += "✅ Tüm çalışanlar eğitimi tamamladı, tebrikler!"
 
-def izin_ekle(user_id: int, tarih: str):
-    d = _oku()
-    k = str(user_id)
-    d.setdefault("izinler", {}).setdefault(k, [])
-    if tarih not in d["izinler"][k]:
-        d["izinler"][k].append(tarih)
-    _yaz(d)
+            await app.bot.send_message(
+                chat_id=GRUP_ID, text=metin, parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Kapanış mesajı hatası: {e}")
 
-
-def izin_kaldir(user_id: int, tarih: str):
-    d = _oku()
-    k = str(user_id)
-    izinler = d.get("izinler", {}).get(k, [])
-    if tarih in izinler:
-        izinler.remove(tarih)
-    d.setdefault("izinler", {})[k] = izinler
-    _yaz(d)
+    aktif_egitim_temizle()
+    logger.info("Günlük eğitim kapatıldı.")
 
 
-def izinli_mi(user_id: int, tarih: str) -> bool:
-    d = _oku()
-    return tarih in d.get("izinler", {}).get(str(user_id), [])
+def zamanlayici_baslat(app):
+    def dongu():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
+        while True:
+            try:
+                simdi = simdi_tr()
+                bugun_08 = simdi.replace(hour=8, minute=0, second=0, microsecond=0)
+                bugun_17 = simdi.replace(hour=17, minute=0, second=0, microsecond=0)
 
-def tamamlandi_kaydet(user_id: int, egitim_id: str):
-    d = _oku()
-    k = str(user_id)
-    d.setdefault("tamamlananlar", {}).setdefault(k, [])
-    if egitim_id not in d["tamamlananlar"][k]:
-        d["tamamlananlar"][k].append(egitim_id)
-    _yaz(d)
+                # Sıradaki tetikleyiciyi bul
+                tetikleyiciler = []
+                if simdi < bugun_08:
+                    tetikleyiciler.append((bugun_08, "ac"))
+                if simdi < bugun_17:
+                    tetikleyiciler.append((bugun_17, "kapat"))
 
+                if not tetikleyiciler:
+                    # Yarın 08:00
+                    yarin_08 = bugun_08 + timedelta(days=1)
+                    tetikleyiciler.append((yarin_08, "ac"))
 
-def eksik_egitimler(user_id: int) -> list:
-    from config import EGITIMLER
-    d = _oku()
-    tamamlananlar = d.get("tamamlananlar", {}).get(str(user_id), [])
-    return [e for e in EGITIMLER.keys() if e not in tamamlananlar]
+                hedef_zaman, hedef_is = min(tetikleyiciler, key=lambda x: x[0])
+                bekle = (hedef_zaman - simdi).total_seconds()
+
+                logger.info(f"Sonraki: {hedef_is} @ {hedef_zaman.strftime('%d.%m.%Y %H:%M')} ({int(bekle/60)} dk sonra)")
+                time.sleep(max(bekle, 1))
+
+                if hedef_is == "ac":
+                    loop.run_until_complete(egitim_baslat(app))
+                else:
+                    loop.run_until_complete(egitim_kapat(app))
+
+            except Exception as e:
+                logger.error(f"Zamanlayıcı hatası: {e}")
+                time.sleep(60)
+
+    threading.Thread(target=dongu, daemon=True).start()
+    logger.info("Zamanlayıcı başlatıldı (08:00 aç / 17:00 kapat).")
