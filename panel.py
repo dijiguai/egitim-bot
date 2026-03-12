@@ -519,9 +519,40 @@ function renderEgitimler(egitimler) {
       <div class="egitim-kart-body">${e.metin_onizleme}</div>
       <div class="egitim-kart-footer">
         <code class="egitim-kod">/egitim_gonder ${e.id}</code>
-        <button class="btn btn-dark btn-sm" onclick="navigator.clipboard.writeText('/egitim_gonder ${e.id}');this.textContent='✓';setTimeout(()=>this.textContent='Kopyala',2000)">Kopyala</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="egitimGonder('${e.id}', this)">▶️ Şimdi Gönder</button>
+          <button class="btn btn-dark btn-sm" onclick="navigator.clipboard.writeText('/egitim_gonder ${e.id}');this.textContent='✓';setTimeout(()=>this.textContent='Kopyala',2000)">Kopyala</button>
+        </div>
       </div>
     </div>`).join('');
+}
+
+// ── EĞİTİM GÖNDER ────────────────────────
+async function egitimGonder(egitimId, btn) {
+  const orijinal = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/egitim-gonder', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({egitim_id: egitimId})
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      btn.textContent = '✅ Gönderildi';
+      btn.style.background = 'var(--green)';
+      setTimeout(() => { btn.textContent = orijinal; btn.style.background = ''; btn.disabled = false; }, 3000);
+    } else {
+      alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+      btn.textContent = orijinal;
+      btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Bağlantı hatası');
+    btn.textContent = orijinal;
+    btn.disabled = false;
+  }
 }
 
 // ── AI ────────────────────────────────────
@@ -692,6 +723,57 @@ SADECE JSON döndür:
         return jsonify({"basarili":True,"id":egitim["id"],"baslik":egitim["baslik"]})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
+
+@app.route("/panel/api/egitim-gonder", methods=["POST"])
+def api_egitim_gonder():
+    if not session.get("panel_giris"): return jsonify({"basarili":False,"hata":"Yetkisiz"}),401
+    from config import EGITIMLER, GRUP_ID
+    from calisanlar import tum_calisanlar
+    from durum import aktif_egitim_set
+
+    veri = request.get_json()
+    egitim_id = veri.get("egitim_id","").strip()
+    egitim = EGITIMLER.get(egitim_id)
+    if not egitim:
+        return jsonify({"basarili":False,"hata":"Eğitim bulunamadı"})
+
+    try:
+        import requests as req_lib
+        token = os.environ.get("TELEGRAM_BOT_TOKEN","")
+        base = f"https://api.telegram.org/bot{token}"
+        keyboard = {"inline_keyboard":[[{"text":"▶️ Eğitime Başla","callback_data":f"egitim_baslat:{egitim_id}"}]]}
+
+        # Gruba gönder
+        if GRUP_ID and GRUP_ID != 0:
+            req_lib.post(f"{base}/sendMessage", json={
+                "chat_id": GRUP_ID,
+                "text": f"📋 *{egitim['baslik']}* eğitimi başladı\!\n\nKatılmak için 👇",
+                "parse_mode": "Markdown",
+                "reply_markup": keyboard
+            }, timeout=10)
+
+        # Aktif eğitim olarak işaretle
+        aktif_egitim_set(egitim_id)
+
+        # Kişisel bildirim
+        calisanlar = tum_calisanlar()
+        import time
+        for uid, c in calisanlar.items():
+            try:
+                req_lib.post(f"{base}/sendMessage", json={
+                    "chat_id": uid,
+                    "text": f"📋 Yeni eğitim: *{egitim['baslik']}*\n\nBaşlamak için 👇",
+                    "parse_mode": "Markdown",
+                    "reply_markup": keyboard
+                }, timeout=10)
+                time.sleep(0.1)
+            except Exception as e:
+                pass
+
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT",8080)))
