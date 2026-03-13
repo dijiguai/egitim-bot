@@ -1,6 +1,6 @@
 """
-Çalışan yönetimi — Google Sheets "Calisanlar" sekmesi
-Telegram ID opsiyonel — doğum tarihi ile de eşleşme yapılabilir.
+Calisan yonetimi - Google Sheets Calisanlar sekmesi
+Telegram ID opsiyonel - dogum tarihi ile eslestirme yapilabilir
 """
 
 import logging, os
@@ -11,6 +11,19 @@ logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SEKME = "Calisanlar"
 SUTUNLAR = ["telegram_id", "ad_soyad", "dogum_tarihi", "gorev", "aktif"]
+
+
+def _to_int(val):
+    """Guvenli int donusumu - None, bos string, 'None' string hepsini None yapar."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    if s in ("", "None", "null", "0"):
+        return None
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return None
 
 
 def _servis():
@@ -29,11 +42,10 @@ def _baslik_kontrol():
             s.values().update(spreadsheetId=sid, range=f"{SEKME}!A1",
                 valueInputOption="RAW", body={"values": [SUTUNLAR]}).execute()
     except Exception as e:
-        logger.warning(f"Başlık kontrol: {e}")
+        logger.warning(f"Baslik kontrol: {e}")
 
 
 def tum_calisanlar() -> dict:
-    """{ telegram_id(int): {...} } — telegram_id boş olabilir, key olarak satır no kullanılır"""
     try:
         s, sid = _servis()
         r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:E").execute()
@@ -42,15 +54,13 @@ def tum_calisanlar() -> dict:
         for i, satir in enumerate(satirlar):
             if len(satir) < 3:
                 continue
-            tid_str = satir[0].strip() if satir[0] else ""
-            try:
-                tid = int(tid_str) if tid_str else -(i+1)  # ID yoksa negatif satır no
-            except:
-                tid = -(i+1)
             aktif = satir[4] if len(satir) > 4 else "1"
             if aktif == "0":
                 continue
-            calisanlar[tid] = {
+            tid_str = satir[0].strip() if satir[0] else ""
+            tid = _to_int(tid_str)
+            key = tid if tid else -(i + 1)
+            calisanlar[key] = {
                 "ad_soyad":     satir[1] if len(satir) > 1 else "",
                 "dogum_tarihi": satir[2] if len(satir) > 2 else "",
                 "gorev":        satir[3] if len(satir) > 3 else "",
@@ -58,20 +68,18 @@ def tum_calisanlar() -> dict:
             }
         return calisanlar
     except Exception as e:
-        logger.error(f"Çalışanlar okunamadı: {e}")
+        logger.error(f"Calisanlar okunamadi: {e}")
         return {}
 
 
-def calisan_bul(telegram_id: int) -> dict:
-    """Telegram ID ile bul."""
-    return tum_calisanlar().get(telegram_id)
+def calisan_bul(telegram_id) -> dict:
+    tid = _to_int(telegram_id)
+    if not tid:
+        return None
+    return tum_calisanlar().get(tid)
 
 
 def calisan_bul_dogum(dogum_tarihi: str) -> tuple:
-    """
-    Doğum tarihiyle çalışan bul.
-    Döndürür: (telegram_id, calisan_dict) veya (None, None)
-    """
     for tid, c in tum_calisanlar().items():
         if c.get("dogum_tarihi") == dogum_tarihi:
             return tid, c
@@ -79,7 +87,6 @@ def calisan_bul_dogum(dogum_tarihi: str) -> tuple:
 
 
 def telegram_id_guncelle(dogum_tarihi: str, telegram_id: int):
-    """Doğum tarihiyle eşleşen çalışana Telegram ID yaz."""
     try:
         s, sid = _servis()
         r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:E").execute()
@@ -87,43 +94,40 @@ def telegram_id_guncelle(dogum_tarihi: str, telegram_id: int):
         for i, satir in enumerate(satirlar):
             if len(satir) > 2 and satir[2].strip() == dogum_tarihi:
                 satir_no = i + 2
-                # Sadece A sütununu güncelle
                 s.values().update(
                     spreadsheetId=sid,
                     range=f"{SEKME}!A{satir_no}",
                     valueInputOption="RAW",
                     body={"values": [[str(telegram_id)]]}
                 ).execute()
-                logger.info(f"Telegram ID güncellendi: {dogum_tarihi} → {telegram_id}")
+                logger.info(f"Telegram ID guncellendi: {dogum_tarihi} -> {telegram_id}")
                 return True
         return False
     except Exception as e:
-        logger.error(f"ID güncelleme hatası: {e}")
+        logger.error(f"ID guncelleme hatasi: {e}")
         return False
 
 
-def _satir_bul(telegram_id: int):
+def _satir_bul(telegram_id) -> int:
+    tid = _to_int(telegram_id)
+    if not tid:
+        return None
     try:
         s, sid = _servis()
         r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:A").execute()
         for i, satir in enumerate(r.get("values", [])):
-            if satir and satir[0] == str(telegram_id):
+            if satir and str(satir[0]).strip() == str(tid):
                 return i + 2
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"Satir bulunamadi: {e}")
     return None
 
 
 def calisan_ekle(telegram_id, ad_soyad: str, dogum_tarihi: str, gorev: str):
     _baslik_kontrol()
-    # telegram_id None, bos string veya 0 olabilir
-    try:
-        tid_int = int(telegram_id) if telegram_id and str(telegram_id).strip() not in ("", "None") else None
-    except (ValueError, TypeError):
-        tid_int = None
-
-    tid_str = str(tid_int) if tid_int else ""
-    satir_no = _satir_bul(tid_int) if tid_int else None
+    tid = _to_int(telegram_id)
+    tid_str = str(tid) if tid else ""
+    satir_no = _satir_bul(tid) if tid else None
     s, sid = _servis()
     deger = [[tid_str, ad_soyad, dogum_tarihi, gorev, "1"]]
     if satir_no:
@@ -140,8 +144,11 @@ def calisan_guncelle(telegram_id, ad_soyad: str, dogum_tarihi: str, gorev: str):
     calisan_ekle(telegram_id, ad_soyad, dogum_tarihi, gorev)
 
 
-def calisan_sil(telegram_id: int):
-    satir_no = _satir_bul(telegram_id)
+def calisan_sil(telegram_id):
+    tid = _to_int(telegram_id)
+    if not tid:
+        return
+    satir_no = _satir_bul(tid)
     if not satir_no:
         return
     s, sid = _servis()
