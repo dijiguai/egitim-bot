@@ -1,5 +1,5 @@
 """
-Egitim buton ve sinav akisi
+Egitim buton ve sinav akisi — gunluk 1 hak sistemi
 """
 
 import logging
@@ -32,37 +32,25 @@ async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             egitim_id = data.split(":")[1]
             chat = update.effective_chat
 
-            # Gruptan basildi — URL butonuyla bota yonlendir
+            # Gruptan basildi — bota yonlendir
             if chat and chat.type in ("group", "supergroup"):
                 bot_link = f"https://t.me/{BOT_USERNAME}?start=egitim_{egitim_id}"
-                await query.answer(
-                    text="Egitimi baslatmak icin bota geciniz.",
-                    show_alert=False
-                )
-                # Kullaniciya ozel mesaj gonder
                 try:
                     await context.bot.send_message(
                         chat_id=user_id,
-                        text=(
-                            "Asagidaki butona basin, egitim hemen baslar:"
-                        ),
+                        text="Egitime baslamak icin asagidaki butona basin:",
                         reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton(
-                                "Egitime Basla",
-                                url=bot_link
-                            )
+                            InlineKeyboardButton("Egitime Basla", url=bot_link)
                         ]])
                     )
                 except Exception as e:
-                    # Bot ile ozel mesaj acilmamis olabilir
                     logger.warning(f"Ozel mesaj gonderilemedi: {e}")
                     await query.answer(
-                        text=f"Bot ile ozel sohbet acin: @{BOT_USERNAME} — sonra Egitime Basla yazin.",
+                        text=f"Once @{BOT_USERNAME} ile ozel sohbet acin.",
                         show_alert=True
                     )
                 return
 
-            # Ozel mesajdan basildi
             await egitim_baslat(update, context, user_id, egitim_id)
             return
 
@@ -80,11 +68,31 @@ async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def egitim_baslat(update, context, user_id, egitim_id):
+    from durum import hak_var_mi, deneme_kullan, kacinci_deneme
+
     egitim = EGITIMLER.get(egitim_id)
     if not egitim:
         await context.bot.send_message(chat_id=user_id, text="Egitim bulunamadi.")
         return
 
+    # Hak kontrolu
+    if not hak_var_mi(user_id):
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                "Bugunluk egitim hakkinizi kullandınız.\n\n"
+                "Yoneticiniz ek hak tanimlarsaa tekrar girebilirsiniz."
+            )
+        )
+        return
+
+    # Kacinci deneme
+    deneme_no = kacinci_deneme(user_id)
+
+    # Hakki kullan
+    deneme_kullan(user_id)
+
+    # Calisani bul
     try:
         from calisanlar import calisan_bul
         calisan = calisan_bul(user_id)
@@ -101,11 +109,13 @@ async def egitim_baslat(update, context, user_id, egitim_id):
             "kimlik_bekleniyor": False,
             "dogum_dogrulama": False,
             "kimlik_dogrulandi": True,
-            "kimlik_deneme": 0
+            "kimlik_deneme": 0,
+            "deneme_no": deneme_no
         }
+        deneme_txt = f" ({deneme_no}. deneme)" if deneme_no > 1 else ""
         await context.bot.send_message(
             chat_id=user_id,
-            text=egitim["metin"],
+            text=egitim["metin"] + f"\n\n_{egitim['sure']}{deneme_txt}_",
             parse_mode="Markdown"
         )
         await soru_gonder(context, user_id, 0, egitim["sorular"])
@@ -118,7 +128,8 @@ async def egitim_baslat(update, context, user_id, egitim_id):
             "kimlik_bekleniyor": False,
             "dogum_dogrulama": True,
             "kimlik_dogrulandi": False,
-            "kimlik_deneme": 0
+            "kimlik_deneme": 0,
+            "deneme_no": deneme_no
         }
         await context.bot.send_message(
             chat_id=user_id,
@@ -162,7 +173,6 @@ async def cevap_isle(update, context, user_id, soru_idx, secim):
     else:
         sonuc = f"Yanlis. Dogru: {harf[dogru_idx]}) {sorular[soru_idx]['secenekler'][dogru_idx]}"
 
-    # Mevcut mesaji guncelle — butonlari kaldir
     try:
         await update.callback_query.edit_message_text(
             text=(
