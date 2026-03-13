@@ -748,15 +748,17 @@ def api_calisan_guncelle():
 def api_calisan_sil():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
     d=request.get_json()
-    calisan_sil(int(d["telegram_id"]))
+    calisan_sil(int(d["telegram_id"])) if d.get("telegram_id") else None
     return jsonify({"basarili":True})
 
 @app.route("/panel/api/izin-ekle", methods=["POST"])
 def api_izin_ekle():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
     d=request.get_json()
-    for t in d.get("tarihler",[]):
-        izin_ekle(int(d["telegram_id"]), t)
+    tid_izin = int(d["telegram_id"]) if d.get("telegram_id") else None
+    if tid_izin:
+        for t in d.get("tarihler",[]):
+            izin_ekle(tid_izin, t)
     return jsonify({"basarili":True})
 
 @app.route("/panel/api/egitimler")
