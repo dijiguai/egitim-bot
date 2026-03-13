@@ -725,24 +725,33 @@ def api_calisan_ekle():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
     d=request.get_json()
     try:
-        tid_str = str(d.get("telegram_id","")).strip()
-        tid = int(tid_str) if tid_str else None
+        raw = d.get("telegram_id", None)
+        # raw None, 0, "None", "" hepsini None yap
+        if raw is None or str(raw).strip() in ("", "None", "null", "0"):
+            tid = None
+        else:
+            tid = int(str(raw).strip())
         calisan_ekle(tid, d["ad_soyad"], d["dogum_tarihi"], d["gorev"])
         return jsonify({"basarili":True})
     except Exception as e:
-        return jsonify({"basarili":False,"hata":str(e)})
+        import traceback
+        return jsonify({"basarili":False,"hata":str(e),"detay":traceback.format_exc()})
 
 @app.route("/panel/api/calisan-guncelle", methods=["POST"])
 def api_calisan_guncelle():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
     d=request.get_json()
     try:
-        tid_str = str(d.get("telegram_id","")).strip()
-        tid = int(tid_str) if tid_str else None
+        raw = d.get("telegram_id", None)
+        if raw is None or str(raw).strip() in ("", "None", "null", "0"):
+            tid = None
+        else:
+            tid = int(str(raw).strip())
         calisan_guncelle(tid, d["ad_soyad"], d["dogum_tarihi"], d["gorev"])
         return jsonify({"basarili":True})
     except Exception as e:
-        return jsonify({"basarili":False,"hata":str(e)})
+        import traceback
+        return jsonify({"basarili":False,"hata":str(e),"detay":traceback.format_exc()})
 
 @app.route("/panel/api/calisan-sil", methods=["POST"])
 def api_calisan_sil():
