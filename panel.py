@@ -867,7 +867,14 @@ SADECE JSON döndür:
         icerik=yanit["content"][0]["text"].strip()
         icerik=re.sub(r"^```json\s*","",icerik); icerik=re.sub(r"^```\s*","",icerik); icerik=re.sub(r"\s*```$","",icerik).strip()
         egitim=json.loads(icerik)
-        EGITIMLER[egitim["id"]]={"baslik":egitim["baslik"],"tur":egitim["tur"],"sure":egitim["sure"],"metin":egitim["metin"],"sorular":egitim["sorular"]}
+        yeni = {"baslik":egitim["baslik"],"tur":egitim["tur"],"sure":egitim["sure"],"metin":egitim["metin"],"sorular":egitim["sorular"]}
+        EGITIMLER[egitim["id"]] = yeni
+        # Sheets'e de kaydet
+        try:
+            from egitimler_sheets import egitim_ekle
+            egitim_ekle(egitim["id"], egitim["baslik"], egitim["tur"], egitim["sure"], egitim["metin"], egitim["sorular"])
+        except Exception as se:
+            logger.warning(f"Sheets kayit hatasi: {se}")
         return jsonify({"basarili":True,"id":egitim["id"],"baslik":egitim["baslik"]})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
@@ -1002,10 +1009,16 @@ def api_egitim_sil():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
     veri = request.get_json()
     eid = veri.get("egitim_id","").strip()
-    if eid in EGITIMLER:
-        del EGITIMLER[eid]
-        return jsonify({"basarili":True})
-    return jsonify({"basarili":False,"hata":"Bulunamadi"})
+    try:
+        from egitimler_sheets import egitim_sil, tum_egitimler
+        basarili = egitim_sil(eid)
+        if basarili:
+            if eid in EGITIMLER: del EGITIMLER[eid]
+            EGITIMLER.update(tum_egitimler())
+            return jsonify({"basarili":True})
+        return jsonify({"basarili":False,"hata":"Bulunamadi"})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
 
 
 @app.route("/panel/api/egitim-guncelle", methods=["POST"])
@@ -1015,10 +1028,20 @@ def api_egitim_guncelle():
     eid = veri.get("egitim_id","").strip()
     if eid not in EGITIMLER:
         return jsonify({"basarili":False,"hata":"Egitim bulunamadi"})
-    if veri.get("baslik"): EGITIMLER[eid]["baslik"] = veri["baslik"]
-    if veri.get("tur"):    EGITIMLER[eid]["tur"]    = veri["tur"]
-    if veri.get("sure"):   EGITIMLER[eid]["sure"]   = veri["sure"]
-    return jsonify({"basarili":True})
+    try:
+        from egitimler_sheets import egitim_guncelle, tum_egitimler
+        egitim_guncelle(eid,
+            baslik=veri.get("baslik"),
+            tur=veri.get("tur"),
+            sure=veri.get("sure")
+        )
+        # Memory'i de guncelle
+        if veri.get("baslik"): EGITIMLER[eid]["baslik"] = veri["baslik"]
+        if veri.get("tur"):    EGITIMLER[eid]["tur"]    = veri["tur"]
+        if veri.get("sure"):   EGITIMLER[eid]["sure"]   = veri["sure"]
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
 
 
 if __name__ == "__main__":
