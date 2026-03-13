@@ -818,7 +818,7 @@ def api_egitim_gonder():
         if GRUP_ID and GRUP_ID != 0:
             req_lib.post(f"{base}/sendMessage", json={
                 "chat_id": GRUP_ID,
-                "text": f"📋 *{egitim['baslik']}* eğitimi başladı\!\n\nKatılmak için 👇",
+                "text": "*" + egitim['baslik'] + "* egitimi basladi!\n\nKatilmak icin",
                 "parse_mode": "Markdown",
                 "reply_markup": keyboard
             }, timeout=10)
@@ -875,11 +875,7 @@ def api_egitim_gonder_calisan():
     try:
         req_lib.post(f"{base}/sendMessage", json={
             "chat_id": tid,
-            "text": f"Yoneticiniz size bugunun egitimini gonderdi.
-
-*{egitim['baslik']}*
-
-Baslamak icin asagidaki butona basin:",
+            "text": "Yoneticiniz size bugunun egitimini gonderdi.\n\n*" + egitim['baslik'] + "*\n\nBaslamak icin asagidaki butona basin:",
             "parse_mode": "Markdown",
             "reply_markup": keyboard
         }, timeout=10)
@@ -915,11 +911,7 @@ def api_ekstra_hak():
     try:
         req_lib.post(f"{base}/sendMessage", json={
             "chat_id": tid,
-            "text": f"Yoneticiniz size ek deneme hakki tanimladı.
-
-*{egitim['baslik']}*
-
-Baslamak icin:",
+            "text": "Yoneticiniz size ek deneme hakki tanimladi.\n\n*" + egitim['baslik'] + "*\n\nBaslamak icin:",
             "parse_mode": "Markdown",
             "reply_markup": keyboard
         }, timeout=10)
