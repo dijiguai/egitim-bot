@@ -32,25 +32,34 @@ async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             egitim_id = data.split(":")[1]
             chat = update.effective_chat
 
-            # Grup'tan basildi — bota yonlendir
+            # Gruptan basildi — URL butonuyla bota yonlendir
             if chat and chat.type in ("group", "supergroup"):
                 bot_link = f"https://t.me/{BOT_USERNAME}?start=egitim_{egitim_id}"
-                keyboard = [[InlineKeyboardButton(
-                    "Egitimi Baslat", url=bot_link
-                )]]
-                await query.edit_message_reply_markup(
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                await query.answer(
+                    text="Egitimi baslatmak icin bota geciniz.",
+                    show_alert=False
                 )
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=(
-                        "Egitimi baslatmak icin asagidaki butona basin:\n"
-                        "Bot size ozel mesaj gonderecektir."
-                    ),
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("Egitimi Baslat", url=bot_link)
-                    ]])
-                )
+                # Kullaniciya ozel mesaj gonder
+                try:
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=(
+                            "Asagidaki butona basin, egitim hemen baslar:"
+                        ),
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton(
+                                "Egitime Basla",
+                                url=bot_link
+                            )
+                        ]])
+                    )
+                except Exception as e:
+                    # Bot ile ozel mesaj acilmamis olabilir
+                    logger.warning(f"Ozel mesaj gonderilemedi: {e}")
+                    await query.answer(
+                        text=f"Bot ile ozel sohbet acin: @{BOT_USERNAME} — sonra Egitime Basla yazin.",
+                        show_alert=True
+                    )
                 return
 
             # Ozel mesajdan basildi
@@ -65,10 +74,7 @@ async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Buton hatasi: {e}", exc_info=True)
         try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="Bir hata olustu, tekrar deneyin."
-            )
+            await context.bot.send_message(chat_id=user_id, text="Bir hata olustu, tekrar deneyin.")
         except:
             pass
 
@@ -79,7 +85,6 @@ async def egitim_baslat(update, context, user_id, egitim_id):
         await context.bot.send_message(chat_id=user_id, text="Egitim bulunamadi.")
         return
 
-    # Calisani bul
     try:
         from calisanlar import calisan_bul
         calisan = calisan_bul(user_id)
@@ -88,7 +93,6 @@ async def egitim_baslat(update, context, user_id, egitim_id):
         calisan = None
 
     if calisan:
-        # Kayitli — direkt sinavi baslat
         kullanici_durum[user_id] = {
             "egitim_id": egitim_id,
             "sorular": egitim["sorular"],
@@ -106,7 +110,6 @@ async def egitim_baslat(update, context, user_id, egitim_id):
         )
         await soru_gonder(context, user_id, 0, egitim["sorular"])
     else:
-        # Kayitli degil — dogum tarihi sor
         kullanici_durum[user_id] = {
             "egitim_id": egitim_id,
             "sorular": egitim["sorular"],
@@ -128,24 +131,15 @@ async def egitim_baslat(update, context, user_id, egitim_id):
 
 
 async def soru_gonder(context, user_id, idx, sorular):
-    """Soruyu butonlarla tek mesajda goster."""
     soru_obj = sorular[idx]
     toplam = len(sorular)
-
-    # Soru metni + secenekler tek mesajda
-    secenekler_metni = "\n".join([
-        f"{['A','B','C','D'][i]}) {s}"
-        for i, s in enumerate(soru_obj["secenekler"])
-    ])
-
     keyboard = [
         [InlineKeyboardButton(
-            f"{['A','B','C','D'][i]}) {s[:40]}",
+            f"{['A','B','C','D'][i]}) {s[:50]}",
             callback_data=f"cevap:{idx}:{i}"
         )]
         for i, s in enumerate(soru_obj["secenekler"])
     ]
-
     await context.bot.send_message(
         chat_id=user_id,
         text=f"Soru {idx+1}/{toplam}\n\n{soru_obj['soru']}",
@@ -161,36 +155,32 @@ async def cevap_isle(update, context, user_id, soru_idx, secim):
     sorular = durum["sorular"]
     dogru_idx = sorular[soru_idx]["dogru"]
     harf = ["A", "B", "C", "D"]
-    secenekler = sorular[soru_idx]["secenekler"]
 
     if secim == dogru_idx:
         durum["dogru_sayisi"] += 1
         sonuc = "Dogru!"
     else:
-        sonuc = f"Yanlis. Dogru: {harf[dogru_idx]}) {secenekler[dogru_idx]}"
+        sonuc = f"Yanlis. Dogru: {harf[dogru_idx]}) {sorular[soru_idx]['secenekler'][dogru_idx]}"
 
-    # Mevcut soruyu guncelle — butonlari kaldir, sonucu goster
-    toplam = len(sorular)
+    # Mevcut mesaji guncelle — butonlari kaldir
     try:
         await update.callback_query.edit_message_text(
             text=(
-                f"Soru {soru_idx+1}/{toplam}\n\n"
+                f"Soru {soru_idx+1}/{len(sorular)}\n\n"
                 f"{sorular[soru_idx]['soru']}\n\n"
                 f"{sonuc}"
             )
         )
     except Exception as e:
-        logger.warning(f"Mesaj guncelleme hatasi: {e}")
+        logger.warning(f"Mesaj guncelleme: {e}")
 
     sonraki = soru_idx + 1
     durum["soru_idx"] = sonraki
     kullanici_durum[user_id] = durum
 
-    if sonraki < toplam:
-        # Bir sonraki soruyu gonder
+    if sonraki < len(sorular):
         await soru_gonder(context, user_id, sonraki, sorular)
     else:
-        # Sinav bitti
         if durum.get("kimlik_dogrulandi"):
             from handlers.kayit_handler import sinav_tamamla_direkt
             await sinav_tamamla_direkt(context, user_id, durum)
