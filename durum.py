@@ -1,10 +1,8 @@
 """
-E�itim sırası, izin ve aktif eğitim yönetimi
+Egitim sirasi, izin, aktif egitim ve deneme hakki yonetimi
 """
 
-import json
-import os
-import logging
+import json, os, logging
 from datetime import date
 
 logger = logging.getLogger(__name__)
@@ -23,8 +21,9 @@ def _oku() -> dict:
         "son_tarih": "",
         "izinler": {},
         "tamamlananlar": {},
-        "aktif": None,           # { egitim_id, grup_mesaj_id, tarih }
-        "bugun_tamamlayanlar": {}  # { "tarih": [user_id, ...] }
+        "aktif": None,
+        "bugun_tamamlayanlar": {},
+        "gunluk_haklar": {}   # { "tarih": { "user_id": { "kalan": 1, "deneme": 0 } } }
     }
 
 
@@ -33,7 +32,64 @@ def _yaz(d: dict):
         json.dump(d, f, ensure_ascii=False, indent=2)
 
 
-# ── EĞİTİM SIRASI ──────────────────────────────────────────
+def _bugun():
+    return date.today().strftime("%d.%m.%Y")
+
+
+# ── DENEME HAKKI ────────────────────────────────────────────
+
+def deneme_hakki_al(user_id: int) -> dict:
+    """
+    Bugunun deneme durumunu dondur.
+    { kalan: int, deneme: int }
+    """
+    d = _oku()
+    bugun = _bugun()
+    haklar = d.setdefault("gunluk_haklar", {}).setdefault(bugun, {})
+    k = str(user_id)
+    if k not in haklar:
+        haklar[k] = {"kalan": 1, "deneme": 0}
+        _yaz(d)
+    return haklar[k]
+
+
+def deneme_kullan(user_id: int):
+    """Bir deneme hakki kullan."""
+    d = _oku()
+    bugun = _bugun()
+    haklar = d.setdefault("gunluk_haklar", {}).setdefault(bugun, {})
+    k = str(user_id)
+    if k not in haklar:
+        haklar[k] = {"kalan": 1, "deneme": 0}
+    haklar[k]["kalan"] = max(0, haklar[k]["kalan"] - 1)
+    haklar[k]["deneme"] = haklar[k].get("deneme", 0) + 1
+    _yaz(d)
+
+
+def ekstra_hak_ver(user_id: int):
+    """Admin 1 ekstra deneme hakki verir."""
+    d = _oku()
+    bugun = _bugun()
+    haklar = d.setdefault("gunluk_haklar", {}).setdefault(bugun, {})
+    k = str(user_id)
+    if k not in haklar:
+        haklar[k] = {"kalan": 0, "deneme": 0}
+    haklar[k]["kalan"] += 1
+    _yaz(d)
+    logger.info(f"Ekstra hak verildi: {user_id}")
+
+
+def hak_var_mi(user_id: int) -> bool:
+    """Bugün hak kaldi mi?"""
+    return deneme_hakki_al(user_id)["kalan"] > 0
+
+
+def kacinci_deneme(user_id: int) -> int:
+    """Kacinci denemede oldugunu dondur."""
+    return deneme_hakki_al(user_id).get("deneme", 0) + 1
+
+
+# ── EGITIM SIRASI ──────────────────────────────────────────
 
 def siradaki_egitim_al():
     from config import EGITIMLER
@@ -41,32 +97,27 @@ def siradaki_egitim_al():
     liste = list(EGITIMLER.keys())
     if not liste:
         return None, None
-
-    bugun = date.today().strftime("%d.%m.%Y")
-
+    bugun = _bugun()
     if d.get("son_tarih") == bugun:
-        # Bugün zaten seçildi — aynısını döndür
         idx = (d.get("egitim_index", 1) - 1) % len(liste)
         eid = liste[idx]
         return eid, EGITIMLER[eid]
-
     idx = d.get("egitim_index", 0) % len(liste)
     eid = liste[idx]
     d["egitim_index"] = (idx + 1) % len(liste)
     d["son_tarih"] = bugun
     _yaz(d)
-    logger.info(f"Yeni eğitim seçildi: {eid} ({idx+1}/{len(liste)})")
     return eid, EGITIMLER[eid]
 
 
-# ── AKTİF EĞİTİM ───────────────────────────────────────────
+# ── AKTIF EGITIM ───────────────────────────────────────────
 
 def aktif_egitim_set(egitim_id: str, grup_mesaj_id: int = None):
     d = _oku()
     d["aktif"] = {
         "egitim_id": egitim_id,
         "grup_mesaj_id": grup_mesaj_id,
-        "tarih": date.today().strftime("%d.%m.%Y"),
+        "tarih": _bugun(),
         "acik": True
     }
     _yaz(d)
@@ -84,46 +135,37 @@ def aktif_egitim_temizle():
 
 
 def egitim_acik_mi() -> bool:
-    """Gün içinde eğitim hâlâ açık mı?"""
     d = _oku()
     aktif = d.get("aktif")
     if not aktif:
         return False
-    if not aktif.get("acik", False):
-        return False
-    # Bugünün eğitimi mi?
-    return aktif.get("tarih") == date.today().strftime("%d.%m.%Y")
+    return aktif.get("acik", False) and aktif.get("tarih") == _bugun()
 
 
 def gunun_egitim_id() -> str:
-    """Bugünün aktif eğitim ID'si."""
     d = _oku()
     aktif = d.get("aktif")
-    if aktif and aktif.get("tarih") == date.today().strftime("%d.%m.%Y"):
+    if aktif and aktif.get("tarih") == _bugun():
         return aktif.get("egitim_id")
     return None
 
 
-# ── TAMAMLAMA TAKİBİ ────────────────────────────────────────
+# ── TAMAMLAMA ──────────────────────────────────────────────
 
 def bugun_tamamlandi_kaydet(user_id: int):
-    """Bugün eğitimi tamamlayanları kaydet (kapanış mesajı için)."""
     d = _oku()
-    bugun = date.today().strftime("%d.%m.%Y")
-    bt = d.setdefault("bugun_tamamlayanlar", {})
-    bt.setdefault(bugun, [])
-    if str(user_id) not in bt[bugun]:
-        bt[bugun].append(str(user_id))
+    bugun = _bugun()
+    d.setdefault("bugun_tamamlayanlar", {}).setdefault(bugun, [])
+    if str(user_id) not in d["bugun_tamamlayanlar"][bugun]:
+        d["bugun_tamamlayanlar"][bugun].append(str(user_id))
     _yaz(d)
 
 
 def bugun_tamamlayanlar(tarih: str) -> list:
-    d = _oku()
-    return d.get("bugun_tamamlayanlar", {}).get(tarih, [])
+    return _oku().get("bugun_tamamlayanlar", {}).get(tarih, [])
 
 
 def tamamlandi_kaydet(user_id: int, egitim_id: str):
-    """Genel eğitim tamamlama kaydı (ilerleme için)."""
     d = _oku()
     k = str(user_id)
     d.setdefault("tamamlananlar", {}).setdefault(k, [])
@@ -140,40 +182,34 @@ def eksik_egitimler(user_id: int) -> list:
     return [e for e in EGITIMLER.keys() if e not in tamamlananlar]
 
 
-# ── İZİN ───────────────────────────────────────────────────
+def tekrar_izni_ver(user_id: int, egitim_id: str):
+    d = _oku()
+    k = str(user_id)
+    t = d.get("tamamlananlar", {}).get(k, [])
+    if egitim_id in t:
+        t.remove(egitim_id)
+        d["tamamlananlar"][k] = t
+        _yaz(d)
+
+
+# ── IZIN ───────────────────────────────────────────────────
 
 def izin_ekle(user_id: int, tarih: str):
     d = _oku()
-    k = str(user_id)
-    d.setdefault("izinler", {}).setdefault(k, [])
-    if tarih not in d["izinler"][k]:
-        d["izinler"][k].append(tarih)
+    d.setdefault("izinler", {}).setdefault(str(user_id), [])
+    if tarih not in d["izinler"][str(user_id)]:
+        d["izinler"][str(user_id)].append(tarih)
     _yaz(d)
 
 
 def izin_kaldir(user_id: int, tarih: str):
     d = _oku()
-    k = str(user_id)
-    liste = d.get("izinler", {}).get(k, [])
+    liste = d.get("izinler", {}).get(str(user_id), [])
     if tarih in liste:
         liste.remove(tarih)
-    d.setdefault("izinler", {})[k] = liste
+    d.setdefault("izinler", {})[str(user_id)] = liste
     _yaz(d)
 
 
 def izinli_mi(user_id: int, tarih: str) -> bool:
-    d = _oku()
-    return tarih in d.get("izinler", {}).get(str(user_id), [])
-
-
-# ── TEKRAR İZNİ ────────────────────────────────────────────
-
-def tekrar_izni_ver(user_id: int, egitim_id: str):
-    """Admin kaldıyı tekrar denesin diye kaydından siler."""
-    d = _oku()
-    k = str(user_id)
-    tamamlananlar = d.get("tamamlananlar", {}).get(k, [])
-    if egitim_id in tamamlananlar:
-        tamamlananlar.remove(egitim_id)
-        d["tamamlananlar"][k] = tamamlananlar
-        _yaz(d)
+    return tarih in _oku().get("izinler", {}).get(str(user_id), [])
