@@ -81,7 +81,11 @@ tr:last-child td{border-bottom:none}tr:hover td{background:#faf8f5}
 .calisan-ad{font-family:'Syne',sans-serif;font-weight:700;font-size:16px}
 .calisan-gorev{font-size:12px;color:var(--muted);margin-top:2px}
 .calisan-id{font-size:11px;color:var(--muted);margin-top:4px;font-family:monospace;background:#f5f3ef;padding:2px 8px;border-radius:4px;display:inline-block}
-.calisan-aksiyonlar{display:flex;gap:8px;flex-wrap:wrap}
+.calisan-aksiyonlar{display:flex;gap:6px;flex-wrap:wrap}
+.btn-orange{background:#e67e22;color:#fff}.btn-orange:hover{background:#d35400}
+.pill{font-size:11px;padding:2px 8px;border-radius:20px;margin-left:6px;font-weight:600}
+.pill-izin{background:#fff3cd;color:#856404}
+.pill-gecti{background:#d1f5d3;color:#1a7431}
 .calisan-ilerleme{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .ilerleme-bar{background:#f0ede8;border-radius:4px;height:8px;overflow:hidden;margin-top:6px}
 .ilerleme-dolu{height:100%;border-radius:4px;background:var(--green);transition:width .5s}
@@ -399,14 +403,20 @@ function renderCalisanlar(calisanlar) {
     <div class="calisan-kart">
       <div class="calisan-kart-header">
         <div>
-          <div class="calisan-ad">${c.ad_soyad} ${c.bugun_izinli ? '<span class="pill pill-izin">🏖 Bugün İzinli</span>' : ''}</div>
+          <div class="calisan-ad">
+            ${c.ad_soyad}
+            ${c.bugun_izinli ? '<span class="pill pill-izin">🏖 Bugün İzinli</span>' : ''}
+            ${c.bugun_tamamladi ? '<span class="pill pill-gecti">✅ Bugün Tamamladı</span>' : ''}
+          </div>
           <div class="calisan-gorev">${c.gorev}</div>
-          <div class="calisan-id">ID: ${c.telegram_id}</div>
+          ${c.telegram_id > 0 ? `<div class="calisan-id">ID: ${c.telegram_id}</div>` : '<div class="calisan-id" style="color:#e67e22">⚠ Telegram bağlı değil</div>'}
         </div>
         <div class="calisan-aksiyonlar">
-          <button class="btn btn-dark btn-sm" onclick="calisanDuzenle(${c.telegram_id},'${c.ad_soyad}','${c.gorev}','${c.dogum_tarihi}')">Düzenle</button>
-          <button class="btn btn-green btn-sm" onclick="izinModalAc(${c.telegram_id},'${c.ad_soyad}')">İzin Ver</button>
-          <button class="btn btn-red btn-sm" onclick="silModalAc(${c.telegram_id},'${c.ad_soyad}')">Sil</button>
+          <button class="btn btn-primary btn-sm" onclick="egitimGonderCalisan(${c.telegram_id},'${c.ad_soyad}',this)" ${c.telegram_id<=0?'disabled':''} title="Bugünkü eğitimi gönder">📤 Eğitim Gönder</button>
+          <button class="btn btn-orange btn-sm" onclick="ekstraHakVer(${c.telegram_id},'${c.ad_soyad}',this)" ${c.telegram_id<=0?'disabled':''} title="Bugün tekrar girebilsin">🔁 Tekrar İzni</button>
+          <button class="btn btn-green btn-sm" onclick="izinModalAc(${c.telegram_id},'${c.ad_soyad}')">🏖 İzin</button>
+          <button class="btn btn-dark btn-sm" onclick="calisanDuzenle(${c.telegram_id},'${c.ad_soyad}','${c.gorev}','${c.dogum_tarihi}')">✏️</button>
+          <button class="btn btn-red btn-sm" onclick="silModalAc(${c.telegram_id},'${c.ad_soyad}')">🗑</button>
         </div>
       </div>
       <div class="calisan-ilerleme">
@@ -527,6 +537,64 @@ function renderEgitimler(egitimler) {
     </div>`).join('');
 }
 
+// ── CALISAN AKSIYONLARI ──────────────────
+
+async function egitimGonderCalisan(tid, ad, btn) {
+  if(!tid || tid <= 0) { alert('Bu çalışanın Telegram hesabı bağlı değil.'); return; }
+  if(!confirm(`${ad} kişisine bugünkü eğitimi göndermek istediğinizden emin misiniz?`)) return;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/egitim-gonder-calisan', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({telegram_id: tid})
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      btn.textContent = '✅ Gönderildi';
+      btn.style.background = 'var(--green, #27ae60)';
+      setTimeout(() => { btn.textContent = '📤 Eğitim Gönder'; btn.style.background = ''; btn.disabled = false; }, 3000);
+    } else {
+      alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+      btn.textContent = '📤 Eğitim Gönder';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Bağlantı hatası');
+    btn.textContent = '📤 Eğitim Gönder';
+    btn.disabled = false;
+  }
+}
+
+async function ekstraHakVer(tid, ad, btn) {
+  if(!tid || tid <= 0) { alert('Bu çalışanın Telegram hesabı bağlı değil.'); return; }
+  if(!confirm(`${ad} kişisine bugün için tekrar eğitim izni vermek istiyor musunuz?`)) return;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/ekstra-hak', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({telegram_id: tid})
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      btn.textContent = '✅ Hak Verildi';
+      btn.style.background = 'var(--green, #27ae60)';
+      setTimeout(() => { btn.textContent = '🔁 Tekrar İzni'; btn.style.background = ''; btn.disabled = false; }, 3000);
+    } else {
+      alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+      btn.textContent = '🔁 Tekrar İzni';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Bağlantı hatası');
+    btn.textContent = '🔁 Tekrar İzni';
+    btn.disabled = false;
+  }
+}
+
 // ── EĞİTİM GÖNDER ────────────────────────
 async function egitimGonder(egitimId, btn) {
   const orijinal = btn.textContent;
@@ -635,6 +703,8 @@ def api_calisanlar():
     calisanlar=tum_calisanlar()
     bugun=date.today().strftime("%d.%m.%Y")
     sonuc=[]
+    from durum import bugun_tamamlayanlar
+    bugun_tamamlayan_listesi = bugun_tamamlayanlar(bugun)
     for tid, c in calisanlar.items():
         eksik=eksik_egitimler(tid)
         sonuc.append({
@@ -643,6 +713,7 @@ def api_calisanlar():
             "gorev": c["gorev"],
             "dogum_tarihi": c["dogum_tarihi"],
             "bugun_izinli": izinli_mi(tid, bugun),
+            "bugun_tamamladi": str(tid) in bugun_tamamlayan_listesi,
             "tamamlanan": len(EGITIMLER)-len(eksik),
             "toplam_egitim": len(EGITIMLER)
         })
@@ -770,6 +841,88 @@ def api_egitim_gonder():
             except Exception as e:
                 pass
 
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/egitim-gonder-calisan", methods=["POST"])
+def api_egitim_gonder_calisan():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    from durum import gunun_egitim_id, aktif_egitim_set, ekstra_hak_ver
+    veri = request.get_json()
+    tid = int(veri.get("telegram_id",0))
+    if not tid: return jsonify({"basarili":False,"hata":"Gecersiz ID"})
+
+    egitim_id = gunun_egitim_id()
+    if not egitim_id:
+        # Siradaki egitimi al
+        from durum import siradaki_egitim_al
+        egitim_id, _ = siradaki_egitim_al()
+
+    egitim = EGITIMLER.get(egitim_id)
+    if not egitim: return jsonify({"basarili":False,"hata":"Aktif egitim yok"})
+
+    aktif_egitim_set(egitim_id)
+    # Ekstra hak ver ki butona basabilsin
+    ekstra_hak_ver(tid)
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN","")
+    base = f"https://api.telegram.org/bot{token}"
+    keyboard = {"inline_keyboard":[[{"text":"Egitime Basla","callback_data":f"egitim_baslat:{egitim_id}"}]]}
+
+    import requests as req_lib
+    try:
+        req_lib.post(f"{base}/sendMessage", json={
+            "chat_id": tid,
+            "text": f"Yoneticiniz size bugunun egitimini gonderdi.
+
+*{egitim['baslik']}*
+
+Baslamak icin asagidaki butona basin:",
+            "parse_mode": "Markdown",
+            "reply_markup": keyboard
+        }, timeout=10)
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/ekstra-hak", methods=["POST"])
+def api_ekstra_hak():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    from durum import ekstra_hak_ver, gunun_egitim_id, aktif_egitim_set
+    veri = request.get_json()
+    tid = int(veri.get("telegram_id",0))
+    if not tid: return jsonify({"basarili":False,"hata":"Gecersiz ID"})
+
+    egitim_id = gunun_egitim_id()
+    if not egitim_id:
+        from durum import siradaki_egitim_al
+        egitim_id, _ = siradaki_egitim_al()
+
+    egitim = EGITIMLER.get(egitim_id)
+    if not egitim: return jsonify({"basarili":False,"hata":"Aktif egitim yok"})
+
+    aktif_egitim_set(egitim_id)
+    ekstra_hak_ver(tid)
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN","")
+    base = f"https://api.telegram.org/bot{token}"
+    keyboard = {"inline_keyboard":[[{"text":"Egitime Basla","callback_data":f"egitim_baslat:{egitim_id}"}]]}
+
+    import requests as req_lib
+    try:
+        req_lib.post(f"{base}/sendMessage", json={
+            "chat_id": tid,
+            "text": f"Yoneticiniz size ek deneme hakki tanimladı.
+
+*{egitim['baslik']}*
+
+Baslamak icin:",
+            "parse_mode": "Markdown",
+            "reply_markup": keyboard
+        }, timeout=10)
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
