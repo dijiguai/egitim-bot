@@ -123,6 +123,33 @@ def egitim_sil(eid: str) -> bool:
         return False
 
 
+def egitim_guncelle_tam(eid: str, baslik=None, tur=None, sure=None, metin=None, sorular=None):
+    """Tum alanlari guncelle."""
+    try:
+        s, sid = _servis()
+        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:F").execute()
+        satirlar = r.get("values", [])
+        for i, satir in enumerate(satirlar):
+            if satir and satir[0].strip() == eid:
+                satir_no = i + 2
+                mevcut = list(satir) + [""] * (6 - len(satir))
+                if baslik  is not None: mevcut[1] = baslik
+                if tur     is not None: mevcut[2] = tur
+                if sure    is not None: mevcut[3] = sure
+                if metin   is not None: mevcut[4] = metin
+                if sorular is not None: mevcut[5] = json.dumps(sorular, ensure_ascii=False)
+                s.values().update(spreadsheetId=sid,
+                    range=f"{SEKME}!A{satir_no}",
+                    valueInputOption="RAW",
+                    body={"values": [mevcut[:6]]}).execute()
+                tum_egitimler()  # cache yenile
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Egitim tam guncelleme hatasi: {e}")
+        return False
+
+
 def config_egitimlerini_sheets_e_yukle(config_egitimler: dict):
     """
     Ilk kurulumda config.py'deki egitimler Sheets'e aktarilir.
