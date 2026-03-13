@@ -185,8 +185,11 @@ textarea.form-input{min-height:80px;resize:vertical}
       <div class="stat red"><div class="stat-label">Kaldı</div><div class="stat-val red" id="st-k">—</div><div class="stat-sub">Yeniden eğitim</div></div>
       <div class="stat blue"><div class="stat-label">Ort. Puan</div><div class="stat-val blue" id="st-p">—</div><div class="stat-sub">100 üzerinden</div></div>
     </div>
-    <div class="section-title">Eğitim Kayıtları</div>
-    <div class="table-wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="section-title" style="margin-bottom:0">Eğitim Kayıtları</div>
+      <button class="btn btn-dark btn-sm" onclick="verileriYukle();this.textContent='✓ Yenilendi';setTimeout(()=>this.textContent='🔄 Yenile',1500)">🔄 Yenile</button>
+    </div>
+    <div class="table-wrap" style="margin-top:14px">
       <table>
         <thead><tr><th>Tarih</th><th>Saat</th><th>Çalışan</th><th>Görev</th><th>Eğitim</th><th>Puan</th><th>Durum</th><th>Kimlik</th></tr></thead>
         <tbody id="kayit-tb"><tr><td colspan="8"><div class="loading"><div class="spinner"></div>Yükleniyor...</div></td></tr></tbody>
@@ -348,8 +351,10 @@ async function verileriYukle() {
   }
 }
 
-function renderKayitlar(kayitlar) {
-  const t=kayitlar.length, g=kayitlar.filter(k=>k.durum==='GEÇTİ').length, k=t-g;
+function renderKayitlar(kayitlarHam) {
+  // En yeni ustte
+  const kayitlar = [...kayitlarHam].reverse();
+  const t=kayitlar.length, g=kayitlar.filter(k=>k.durum==='GEÇTİ'||k.durum==='GECTI').length, k=t-g;
   const p=kayitlar.filter(k=>k.puan).map(k=>parseInt(k.puan)||0);
   const ort=p.length?Math.round(p.reduce((a,b)=>a+b,0)/p.length):0;
   document.getElementById('st-t').textContent=t;
