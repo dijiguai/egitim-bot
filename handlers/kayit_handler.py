@@ -162,6 +162,7 @@ async def sinav_tamamla_direkt(context, user_id, durum, calisan=None, guncelle=N
     gecti = puan >= GECME_NOTU
     simdi = datetime.datetime.now()
 
+    deneme_no = durum.get("deneme_no", 1)
     try:
         kayit_ekle({
             "tarih": simdi.strftime("%d.%m.%Y"),
@@ -174,7 +175,8 @@ async def sinav_tamamla_direkt(context, user_id, durum, calisan=None, guncelle=N
             "puan": str(puan),
             "durum": "GECTI" if gecti else "KALDI",
             "kimlik_dogrulandi": "EVET",
-            "dogum_yili": calisan.get("dogum_tarihi", "").split(".")[-1]
+            "dogum_yili": calisan.get("dogum_tarihi", "").split(".")[-1],
+            "deneme_no": str(deneme_no)
         })
         from durum import tamamlandi_kaydet
         if gecti:
@@ -185,10 +187,11 @@ async def sinav_tamamla_direkt(context, user_id, durum, calisan=None, guncelle=N
     kullanici_durum.pop(user_id, None)
 
     ad = calisan['ad_soyad'].split()[0]
+    deneme_txt = f" ({deneme_no}. denemede)" if deneme_no > 1 else ""
     if gecti:
-        mesaj = f"Tebrikler {ad}!\n\nEgitimi gecdiniz!\nPuaniniz: {puan}/100\n\nIyi calismalar!"
+        mesaj = f"Tebrikler {ad}!\n\nEgitimi gecdiniz{deneme_txt}!\nPuaniniz: {puan}/100\n\nIyi calismalar!"
     else:
-        mesaj = f"Egitim Sonucu\n\nGecemediniz.\nPuaniniz: {puan}/100 (Gecme: {GECME_NOTU})\n\nYoneticiniz sizi bilgilendirecektir."
+        mesaj = f"Egitim Sonucu\n\nGecemediniz.\nPuaniniz: {puan}/100 (Gecme: {GECME_NOTU})\n\nYoneticiniz ek hak tanimlarsa tekrar girebilirsiniz."
 
     if guncelle:
         await guncelle.message.reply_text(mesaj)
