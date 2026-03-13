@@ -724,7 +724,9 @@ def api_calisan_ekle():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
     d=request.get_json()
     try:
-        calisan_ekle(int(d["telegram_id"]), d["ad_soyad"], d["dogum_tarihi"], d["gorev"])
+        tid_str = str(d.get("telegram_id","")).strip()
+        tid = int(tid_str) if tid_str else None
+        calisan_ekle(tid, d["ad_soyad"], d["dogum_tarihi"], d["gorev"])
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
@@ -734,7 +736,9 @@ def api_calisan_guncelle():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
     d=request.get_json()
     try:
-        calisan_guncelle(int(d["telegram_id"]), d["ad_soyad"], d["dogum_tarihi"], d["gorev"])
+        tid_str = str(d.get("telegram_id","")).strip()
+        tid = int(tid_str) if tid_str else None
+        calisan_guncelle(tid, d["ad_soyad"], d["dogum_tarihi"], d["gorev"])
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
