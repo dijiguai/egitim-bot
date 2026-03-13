@@ -571,7 +571,7 @@ function renderEgitimler(egitimler) {
       <div class="egitim-kart-footer">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="egitimGonder('${e.id}', this)">▶️ Şimdi Gönder</button>
-          <button class="btn btn-dark btn-sm" onclick="egitimDuzenleModalAc('${e.id}','${e.baslik.replace(/'/g,"\'")}','${e.tur.replace(/'/g,"\'")}','${e.sure.replace(/'/g,"\'")}')">✏️ Düzenle</button>
+          <button class="btn btn-dark btn-sm" onclick="egitimDetayAl('${e.id}',this)">✏️ Düzenle</button>
           <button class="btn btn-red btn-sm" onclick="egitimSil('${e.id}','${e.baslik.replace(/'/g,"\'")}',this)">🗑 Sil</button>
         </div>
       </div>
