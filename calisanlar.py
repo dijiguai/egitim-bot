@@ -116,8 +116,14 @@ def _satir_bul(telegram_id: int):
 
 def calisan_ekle(telegram_id, ad_soyad: str, dogum_tarihi: str, gorev: str):
     _baslik_kontrol()
-    tid_str = str(telegram_id) if telegram_id else ""
-    satir_no = _satir_bul(telegram_id) if telegram_id else None
+    # telegram_id None, bos string veya 0 olabilir
+    try:
+        tid_int = int(telegram_id) if telegram_id and str(telegram_id).strip() not in ("", "None") else None
+    except (ValueError, TypeError):
+        tid_int = None
+
+    tid_str = str(tid_int) if tid_int else ""
+    satir_no = _satir_bul(tid_int) if tid_int else None
     s, sid = _servis()
     deger = [[tid_str, ad_soyad, dogum_tarihi, gorev, "1"]]
     if satir_no:
@@ -127,7 +133,7 @@ def calisan_ekle(telegram_id, ad_soyad: str, dogum_tarihi: str, gorev: str):
         s.values().append(spreadsheetId=sid, range=f"{SEKME}!A1",
             valueInputOption="RAW", insertDataOption="INSERT_ROWS",
             body={"values": deger}).execute()
-    logger.info(f"Çalışan eklendi: {ad_soyad}")
+    logger.info(f"Calisan eklendi: {ad_soyad}")
 
 
 def calisan_guncelle(telegram_id, ad_soyad: str, dogum_tarihi: str, gorev: str):
