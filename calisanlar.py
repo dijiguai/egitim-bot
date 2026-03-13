@@ -59,7 +59,7 @@ def tum_calisanlar() -> dict:
                 continue
             tid_str = satir[0].strip() if satir[0] else ""
             tid = _to_int(tid_str)
-            key = tid if tid else -(i + 1)
+            key = tid if (tid and tid != 0) else -(i + 1)
             calisanlar[key] = {
                 "ad_soyad":     satir[1] if len(satir) > 1 else "",
                 "dogum_tarihi": satir[2] if len(satir) > 2 else "",
@@ -126,7 +126,7 @@ def _satir_bul(telegram_id) -> int:
 def calisan_ekle(telegram_id, ad_soyad: str, dogum_tarihi: str, gorev: str):
     _baslik_kontrol()
     tid = _to_int(telegram_id)
-    tid_str = str(tid) if tid else ""
+    tid_str = str(tid) if tid else "0"  # Bos birakmak yerine 0 yaz
     satir_no = _satir_bul(tid) if tid else None
     s, sid = _servis()
     deger = [[tid_str, ad_soyad, dogum_tarihi, gorev, "1"]]
