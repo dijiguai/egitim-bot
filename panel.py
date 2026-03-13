@@ -464,7 +464,8 @@ async function calisanKaydet() {
 
   const endpoint = editId ? '/panel/api/calisan-guncelle' : '/panel/api/calisan-ekle';
   try {
-    const r = await fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({telegram_id:parseInt(tid),ad_soyad:ad,gorev,dogum_tarihi:dogum})});
+    const tidVal = tid ? parseInt(tid) : null;
+    const r = await fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({telegram_id:tidVal,ad_soyad:ad,gorev,dogum_tarihi:dogum})});
     const d = await r.json();
     if(d.basarili){modalKapat('calisan-modal');calisanListesiYukle();}
     else{hataEl.textContent=d.hata||'Hata oluştu.';hataEl.style.display='block';}
