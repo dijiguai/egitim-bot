@@ -277,6 +277,29 @@ textarea.form-input{min-height:80px;resize:vertical}
 </div>
 
 <!-- SİL ONAY MODAL -->
+<div class="modal-overlay" id="egitim-duzenle-modal">
+  <div class="modal">
+    <div class="modal-title">Eğitimi Düzenle</div>
+    <input type="hidden" id="ed-id">
+    <div class="form-group">
+      <label class="form-label">Başlık *</label>
+      <input type="text" class="form-input" id="ed-baslik" placeholder="Eğitim başlığı">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tür</label>
+      <input type="text" class="form-input" id="ed-tur" placeholder="örn: İş Güvenliği">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Süre</label>
+      <input type="text" class="form-input" id="ed-sure" placeholder="örn: ~15 dakika">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="egitimDuzenleKaydet()">Kaydet</button>
+      <button class="btn btn-dark" onclick="modalKapat('egitim-duzenle-modal')">İptal</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="sil-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-title">Çalışanı Sil</div>
@@ -527,20 +550,53 @@ async function egitimListesiYukle() {
 function renderEgitimler(egitimler) {
   if(!egitimler.length){document.getElementById('egitim-liste').innerHTML='<div class="empty"><div class="empty-icon">📚</div>Eğitim yok</div>';return;}
   document.getElementById('egitim-liste').innerHTML=egitimler.map(e=>`
-    <div class="egitim-kart">
+    <div class="egitim-kart" id="ekart-${e.id}">
       <div class="egitim-kart-header">
         <div><div class="egitim-kart-baslik">${e.baslik}</div><span class="egitim-tur">${e.tur}</span></div>
         <div style="font-size:12px;color:var(--muted);white-space:nowrap">${e.sure} · ${e.soru_sayisi} soru</div>
       </div>
       <div class="egitim-kart-body">${e.metin_onizleme}</div>
       <div class="egitim-kart-footer">
-        <code class="egitim-kod">/egitim_gonder ${e.id}</code>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="egitimGonder('${e.id}', this)">▶️ Şimdi Gönder</button>
-          <button class="btn btn-dark btn-sm" onclick="navigator.clipboard.writeText('/egitim_gonder ${e.id}');this.textContent='✓';setTimeout(()=>this.textContent='Kopyala',2000)">Kopyala</button>
+          <button class="btn btn-dark btn-sm" onclick="egitimDuzenleModalAc('${e.id}','${e.baslik.replace(/'/g,"\'")}','${e.tur.replace(/'/g,"\'")}','${e.sure.replace(/'/g,"\'")}')">✏️ Düzenle</button>
+          <button class="btn btn-red btn-sm" onclick="egitimSil('${e.id}','${e.baslik.replace(/'/g,"\'")}',this)">🗑 Sil</button>
         </div>
       </div>
     </div>`).join('');
+}
+
+async function egitimSil(id, baslik, btn) {
+  if(!confirm(baslik + ' eğitimini silmek istediğinizden emin misiniz?')) return;
+  btn.textContent = '⏳'; btn.disabled = true;
+  const r = await fetch('/panel/api/egitim-sil', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({egitim_id:id})});
+  const d = await r.json();
+  if(d.basarili) {
+    document.getElementById('ekart-'+id)?.remove();
+  } else {
+    alert('Hata: '+(d.hata||'Bilinmeyen'));
+    btn.textContent = '🗑 Sil'; btn.disabled = false;
+  }
+}
+
+function egitimDuzenleModalAc(id, baslik, tur, sure) {
+  document.getElementById('ed-id').value = id;
+  document.getElementById('ed-baslik').value = baslik;
+  document.getElementById('ed-tur').value = tur;
+  document.getElementById('ed-sure').value = sure;
+  document.getElementById('egitim-duzenle-modal').classList.add('open');
+}
+
+async function egitimDuzenleKaydet() {
+  const id = document.getElementById('ed-id').value;
+  const baslik = document.getElementById('ed-baslik').value.trim();
+  const tur = document.getElementById('ed-tur').value.trim();
+  const sure = document.getElementById('ed-sure').value.trim();
+  if(!baslik){ alert('Başlık zorunlu'); return; }
+  const r = await fetch('/panel/api/egitim-guncelle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({egitim_id:id,baslik,tur,sure})});
+  const d = await r.json();
+  if(d.basarili) { modalKapat('egitim-duzenle-modal'); egitimListesiYukle(); }
+  else alert('Hata: '+(d.hata||'Bilinmeyen'));
 }
 
 // ── CALISAN AKSIYONLARI ──────────────────
@@ -697,7 +753,7 @@ def api_kayitlar():
         konu=k.get("egitim_konusu","?")
         ozet.setdefault(konu,{"toplam":0,"gecti":0,"kaldi":0})
         ozet[konu]["toplam"]+=1
-        if k.get("durum")=="GEÇTİ": ozet[konu]["gecti"]+=1
+        if k.get("durum") in ("GEÇTİ","GECTI"): ozet[konu]["gecti"]+=1
         else: ozet[konu]["kaldi"]+=1
     return jsonify({"kayitlar":f,"egitim_ozet":ozet})
 
@@ -939,6 +995,30 @@ def api_ekstra_hak():
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/egitim-sil", methods=["POST"])
+def api_egitim_sil():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    eid = veri.get("egitim_id","").strip()
+    if eid in EGITIMLER:
+        del EGITIMLER[eid]
+        return jsonify({"basarili":True})
+    return jsonify({"basarili":False,"hata":"Bulunamadi"})
+
+
+@app.route("/panel/api/egitim-guncelle", methods=["POST"])
+def api_egitim_guncelle():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    eid = veri.get("egitim_id","").strip()
+    if eid not in EGITIMLER:
+        return jsonify({"basarili":False,"hata":"Egitim bulunamadi"})
+    if veri.get("baslik"): EGITIMLER[eid]["baslik"] = veri["baslik"]
+    if veri.get("tur"):    EGITIMLER[eid]["tur"]    = veri["tur"]
+    if veri.get("sure"):   EGITIMLER[eid]["sure"]   = veri["sure"]
+    return jsonify({"basarili":True})
 
 
 if __name__ == "__main__":
