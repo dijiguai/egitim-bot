@@ -5,7 +5,7 @@ Is Basi Egitim Botu - Ana Dosya
 import logging, os, threading
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from handlers import egitim_handler, admin_handler, kayit_handler, izin_handler
-from handlers.grup_handler import yeni_uye_handler, yeni_uye_ekle_callback, yeni_uye_yoksay_callback, grup_uyelerini_tara
+from handlers.grup_handler import yeni_uye_handler, yeni_uye_ekle_callback, yeni_uye_yoksay_callback, grup_uyelerini_tara, grup_mesaj_dinle
 from panel import app as flask_app
 from scheduler import zamanlayici_baslat
 
@@ -60,6 +60,14 @@ def main():
     app.add_handler(CommandHandler("eksik", izin_handler.eksik_cmd))
     # Gruba yeni uye katilimi
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, yeni_uye_handler))
+
+    # Grupta mesaj yazanları takip et (kayitsiz uyeleri tespit et)
+    from config import GRUP_ID
+    if GRUP_ID:
+        app.add_handler(MessageHandler(
+            filters.Chat(GRUP_ID) & filters.TEXT & ~filters.COMMAND,
+            grup_mesaj_dinle
+        ))
 
     # Callback handler — oncelik sirasi onemli
     app.add_handler(CallbackQueryHandler(yeni_uye_ekle_callback, pattern="^yeni_uye_ekle:"))
