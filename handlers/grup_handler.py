@@ -87,8 +87,11 @@ async def grup_mesaj_dinle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not chat or chat.type not in ("group", "supergroup"):
         return
 
+    logger.info(f"Grup mesaji alindi: chat_id={chat.id}, GRUP_ID={GRUP_ID}")
+
     # Sadece hedef grubu dinle
     if str(chat.id) != str(GRUP_ID):
+        logger.info(f"Farkli grup, atlandi: {chat.id}")
         return
 
     user = update.effective_user
