@@ -101,7 +101,21 @@ async def grup_mesaj_dinle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = user.id
     ad = f"{user.first_name or ''} {user.last_name or ''}".strip()
     username = f"@{user.username}" if user.username else ""
-    mesaj_metni = update.message.text or ""
+    msg = update.message
+    if msg.text:
+        mesaj_metni = msg.text
+    elif msg.sticker:
+        mesaj_metni = f"[Sticker: {msg.sticker.emoji or ''}]"
+    elif msg.photo:
+        mesaj_metni = "[Fotoğraf]"
+    elif msg.video:
+        mesaj_metni = "[Video]"
+    elif msg.voice:
+        mesaj_metni = "[Sesli mesaj]"
+    elif msg.document:
+        mesaj_metni = "[Dosya]"
+    else:
+        mesaj_metni = "[Medya]"
     simdi = _simdi()
 
     # Mesaj loguna ekle
