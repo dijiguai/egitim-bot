@@ -260,6 +260,7 @@ textarea.form-input{min-height:80px;resize:vertical}
     <div class="form-group">
       <label class="form-label">Telegram ID <span style="color:var(--muted);font-weight:400">(opsiyonel)</span></label>
       <input type="text" class="form-input" id="c-tid" placeholder="Boş bırakabilirsiniz — sistem doğum tarihiyle eşleştirir">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Değiştirirseniz eski eğitim kayıtları bu kişiyle ilişkilendirilemez.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Ad Soyad *</label>
@@ -654,7 +655,9 @@ function calisanModalAc() {
 function calisanDuzenle(tid, ad, gorev, dogum) {
   document.getElementById('calisan-modal-baslik').textContent='Çalışanı Düzenle';
   document.getElementById('calisan-edit-id').value=tid;
-  document.getElementById('c-tid').value=tid; document.getElementById('c-tid').disabled=true;
+  const tidGercek = (!tid || tid <= 0) ? '' : tid;
+  document.getElementById('c-tid').value = tidGercek;
+  document.getElementById('c-tid').disabled = false;
   document.getElementById('c-ad').value=ad;
   document.getElementById('c-gorev').value=gorev;
   document.getElementById('c-dogum').value=dogum;
