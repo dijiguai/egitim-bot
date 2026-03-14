@@ -62,12 +62,10 @@ def main():
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, yeni_uye_handler))
 
     # Grupta mesaj yazanları takip et (kayitsiz uyeleri tespit et)
-    from config import GRUP_ID
-    if GRUP_ID:
-        app.add_handler(MessageHandler(
-            filters.Chat(GRUP_ID) & filters.TEXT & ~filters.COMMAND,
-            grup_mesaj_dinle
-        ))
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        grup_mesaj_dinle
+    ))
 
     # Callback handler — oncelik sirasi onemli
     app.add_handler(CallbackQueryHandler(yeni_uye_ekle_callback, pattern="^yeni_uye_ekle:"))
