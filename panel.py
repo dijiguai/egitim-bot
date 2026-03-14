@@ -202,7 +202,11 @@ textarea.form-input{min-height:80px;resize:vertical}
   <div class="tab-content" id="tab-bekleyenler">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div class="section-title" style="margin:0">Gruba Bağlı Olup Sistemde Olmayan Üyeler</div>
-      <button class="btn btn-dark btn-sm" onclick="bekleyenleriYukle()">🔄 Yenile</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="manuel-uid" class="form-input" style="width:180px;padding:6px 10px" placeholder="Telegram ID gir...">
+        <button class="btn btn-primary btn-sm" onclick="manuelUyeEkle()">+ Ekle</button>
+        <button class="btn btn-dark btn-sm" onclick="bekleyenleriYukle()">🔄 Yenile</button>
+      </div>
     </div>
     <div id="bekleyen-liste"><div class="empty"><div class="empty-icon">🔔</div>Yükleniyor...</div></div>
   </div>
@@ -1185,6 +1189,41 @@ def api_egitim_guncelle():
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/bekleyen-manuel-ekle", methods=["POST"])
+def api_bekleyen_manuel_ekle():
+    """Panelden manuel ID girilerek bekleyene ekle."""
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    uid = int(veri.get("user_id",0))
+    if not uid: return jsonify({"basarili":False,"hata":"Gecersiz ID"})
+
+    from calisanlar import calisan_bul
+    if calisan_bul(uid):
+        return jsonify({"basarili":False,"mesaj":"Bu kullanici zaten sistemde kayitli"})
+
+    import requests as req_lib
+    token = os.environ.get("TELEGRAM_BOT_TOKEN","")
+    try:
+        # Kullanici bilgisini Telegram'dan al
+        r = req_lib.get(f"https://api.telegram.org/bot{token}/getChat",
+                        params={"chat_id": uid}, timeout=5)
+        d = r.json()
+        if d.get("ok"):
+            u = d["result"]
+            ad = f"{u.get('first_name','')} {u.get('last_name','')}".strip() or f"Kullanici {uid}"
+            username = f"@{u['username']}" if u.get("username") else ""
+        else:
+            ad = f"Kullanici {uid}"
+            username = ""
+    except:
+        ad = f"Kullanici {uid}"
+        username = ""
+
+    from handlers.grup_handler import yeni_uyeler
+    yeni_uyeler[uid] = {"ad": ad, "username": username}
+    return jsonify({"basarili":True})
 
 
 @app.route("/panel/api/bekleyenler")
