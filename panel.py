@@ -160,6 +160,7 @@ textarea.form-input{min-height:80px;resize:vertical}
 <div class="tabs">
   <div class="tab active" onclick="sekme('kayitlar',this)">📊 Kayıtlar</div>
   <div class="tab" onclick="sekme('calisanlar',this)">👥 Çalışanlar</div>
+  <div class="tab" onclick="sekme('bekleyenler',this)" id="tab-btn-bekleyenler">🔔 Bekleyenler <span id="bekleyen-sayi" style="background:#e74c3c;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
   <div class="tab" onclick="sekme('istatistik',this)">📈 İstatistik</div>
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
 </div>
@@ -198,6 +199,14 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 
   <!-- ÇALIŞANLAR -->
+  <div class="tab-content" id="tab-bekleyenler">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="section-title" style="margin:0">Gruba Bağlı Olup Sistemde Olmayan Üyeler</div>
+      <button class="btn btn-dark btn-sm" onclick="bekleyenleriYukle()">🔄 Yenile</button>
+    </div>
+    <div id="bekleyen-liste"><div class="empty"><div class="empty-icon">🔔</div>Yükleniyor...</div></div>
+  </div>
+
   <div class="tab-content" id="tab-calisanlar">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div class="section-title" style="margin:0">Çalışan Listesi</div>
@@ -366,6 +375,7 @@ function sekme(ad, el) {
   el.classList.add('active');
   document.getElementById('filtre-bar').style.display = (ad==='calisanlar'||ad==='egitimler') ? 'none' : 'flex';
   if(ad==='calisanlar') calisanListesiYukle();
+  if(ad==='bekleyenler') bekleyenleriYukle();
   if(ad==='egitimler') egitimListesiYukle();
 }
 
@@ -423,6 +433,77 @@ function renderIstatistik(ozet) {
 }
 
 // ── ÇALIŞANLAR ────────────────────────────
+async function bekleyenleriYukle() {
+  document.getElementById('bekleyen-liste').innerHTML = '<div class="loading"><div class="spinner"></div>Yükleniyor...</div>';
+  try {
+    const r = await fetch('/panel/api/bekleyenler');
+    const d = await r.json();
+    const sayi = document.getElementById('bekleyen-sayi');
+    if(d.length > 0) {
+      sayi.textContent = d.length;
+      sayi.style.display = 'inline';
+    } else {
+      sayi.style.display = 'none';
+    }
+    if(!d.length) {
+      document.getElementById('bekleyen-liste').innerHTML = '<div class="empty"><div class="empty-icon">✅</div>Tüm grup üyeleri sisteme kayıtlı.</div>';
+      return;
+    }
+    document.getElementById('bekleyen-liste').innerHTML = d.map(u => `
+      <div class="calisan-kart">
+        <div class="calisan-kart-header">
+          <div>
+            <div class="calisan-ad">${u.ad}</div>
+            <div class="calisan-gorev" style="color:var(--muted)">${u.username || '—'}</div>
+            <div class="calisan-id">ID: ${u.user_id}</div>
+          </div>
+          <div class="calisan-aksiyonlar">
+            <button class="btn btn-primary btn-sm" onclick="bekleyenEkleModalAc(${u.user_id},'${u.ad.replace(/'/g,"\'")}')">✅ Sisteme Ekle</button>
+            <button class="btn btn-dark btn-sm" onclick="bekleyenBildir(${u.user_id},'${u.ad.replace(/'/g,"\'")}',this)">📨 Eğitim Daveti Gönder</button>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('bekleyen-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi: ' + e.message + '</div>';
+  }
+}
+
+function bekleyenEkleModalAc(userId, ad) {
+  // Calisan ekleme modalini ac, ID dolu gelsin
+  document.getElementById('calisan-modal-baslik').textContent = 'Çalışan Ekle';
+  document.getElementById('calisan-edit-id').value = '';
+  document.getElementById('c-tid').value = userId;
+  document.getElementById('c-tid').disabled = false;
+  document.getElementById('c-ad').value = ad;
+  document.getElementById('c-gorev').value = '';
+  document.getElementById('c-dogum').value = '';
+  document.getElementById('calisan-hata').style.display = 'none';
+  document.getElementById('calisan-modal').classList.add('open');
+}
+
+async function bekleyenBildir(userId, ad, btn) {
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/bekleyen-bildir', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({user_id: userId, ad: ad})
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      btn.textContent = '✅ Gönderildi';
+      btn.style.background = 'var(--green,#27ae60)';
+      setTimeout(() => { btn.textContent = '📨 Eğitim Daveti Gönder'; btn.style.background=''; btn.disabled=false; }, 3000);
+    } else {
+      alert('Hata: ' + (d.hata||''));
+      btn.textContent = '📨 Eğitim Daveti Gönder'; btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Bağlantı hatası');
+    btn.textContent = '📨 Eğitim Daveti Gönder'; btn.disabled = false;
+  }
+}
+
 async function calisanListesiYukle() {
   document.getElementById('calisan-liste').innerHTML='<div class="loading"><div class="spinner"></div></div>';
   try {
@@ -1101,6 +1182,69 @@ def api_egitim_guncelle():
             metin=veri.get("metin"),
             sorular=veri.get("sorular")
         )
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/bekleyenler")
+def api_bekleyenler():
+    """Grupta olup sistemde kaydi olmayan uyeleri dondur."""
+    if not session.get("panel_giris"): return jsonify([]), 401
+    try:
+        from handlers.grup_handler import yeni_uyeler
+        from calisanlar import tum_calisanlar
+        kayitlilar = tum_calisanlar()
+        kayitli_idler = {str(k) for k in kayitlilar.keys() if k > 0}
+        sonuc = []
+        for uid, bilgi in yeni_uyeler.items():
+            if str(uid) not in kayitli_idler:
+                sonuc.append({
+                    "user_id": uid,
+                    "ad": bilgi.get("ad", f"Kullanici {uid}"),
+                    "username": bilgi.get("username", "")
+                })
+        return jsonify(sonuc)
+    except Exception as e:
+        return jsonify([])
+
+
+@app.route("/panel/api/bekleyen-bildir", methods=["POST"])
+def api_bekleyen_bildir():
+    """Sistemde olmayan kullaniciya Telegram uzerinden eğitim daveti gonder."""
+    if not session.get("panel_giris"): return jsonify({"basarili":False}), 401
+    veri = request.get_json()
+    uid = int(veri.get("user_id", 0))
+    ad = veri.get("ad", "")
+    if not uid: return jsonify({"basarili":False,"hata":"Gecersiz ID"})
+
+    from durum import gunun_egitim_id, aktif_egitim_set, siradaki_egitim_al
+    from config import EGITIMLER, BOT_USERNAME
+    egitim_id = gunun_egitim_id()
+    if not egitim_id:
+        egitim_id, _ = siradaki_egitim_al()
+    egitim = EGITIMLER.get(egitim_id, {})
+    aktif_egitim_set(egitim_id)
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN","")
+    base = f"https://api.telegram.org/bot{token}"
+    bot_link = f"https://t.me/{BOT_USERNAME}?start=egitim_{egitim_id}"
+
+    import requests as req_lib
+    try:
+        req_lib.post(f"{base}/sendMessage", json={
+            "chat_id": uid,
+            "text": (
+                f"Merhaba {ad}!\n\n"
+                f"Is basi egitim sistemine hosgeldiniz.\n"
+                f"Bugunun egitimi: *{egitim.get('baslik','')}*\n\n"
+                f"Egitime baslamak icin asagidaki butona basin:"
+            ),
+            "parse_mode": "Markdown",
+            "reply_markup": {"inline_keyboard":[[
+                {"text": "Egitime Basla", "url": bot_link}
+            ]]}
+        }, timeout=10)
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
