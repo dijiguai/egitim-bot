@@ -5,11 +5,11 @@ Yapılandırma — Eğitim içerikleri ve sistem ayarları
 GECME_NOTU = 70
 
 # Botun Telegram kullanici adi (@olmadan) — @BotFather'dan ogrenilir
-BOT_USERNAME = "toolbox_egitim_bot"  # <- BURAYA BOTUN KULLANICI ADINI YAZ
+BOT_USERNAME = "BasTasEgitimBot"  # <- BURAYA BOTUN KULLANICI ADINI YAZ
 ADMIN_IDS = [1424268115]
 
 # Telegram grup ID
-GRUP_ID = -5162987964  # Telegram grup ID
+GRUP_ID = -1003774513585  # Telegram grup ID
 
 # Calisanlar { telegram_id: { ad_soyad, dogum_tarihi, gorev } }
 CALISANLAR = {
