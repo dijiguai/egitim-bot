@@ -71,14 +71,9 @@ async def metin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await kimlik_dogrula(update, context, user_id, durum)
         return
 
-    # Grup mesaji — kayitsiz uye tespiti
+    # Grup mesajlari bot.py'deki ayri handler tarafindan islenir
     chat = update.effective_chat
     if chat and hasattr(chat, 'type') and chat.type in ("group", "supergroup"):
-        try:
-            from handlers.grup_handler import grup_mesaj_dinle
-            await grup_mesaj_dinle(update, context)
-        except Exception as e:
-            logger.warning(f"Grup mesaj dinleme hatasi: {e}")
         return
 
 
