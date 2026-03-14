@@ -437,6 +437,27 @@ function renderIstatistik(ozet) {
 }
 
 // ── ÇALIŞANLAR ────────────────────────────
+async function manuelUyeEkle() {
+  const uid = parseInt(document.getElementById('manuel-uid').value);
+  if(!uid || isNaN(uid)) { alert('Gecerli bir Telegram ID girin'); return; }
+  try {
+    const r = await fetch('/panel/api/bekleyen-manuel-ekle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: uid})
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      document.getElementById('manuel-uid').value = '';
+      bekleyenleriYukle();
+    } else {
+      alert(d.mesaj || d.hata || 'Hata olustu');
+    }
+  } catch(e) {
+    alert('Baglanti hatasi: ' + e.message);
+  }
+}
+
 async function bekleyenleriYukle() {
   document.getElementById('bekleyen-liste').innerHTML = '<div class="loading"><div class="spinner"></div>Yükleniyor...</div>';
   try {
