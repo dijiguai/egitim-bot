@@ -71,6 +71,13 @@ def main():
     app.add_handler(CallbackQueryHandler(yeni_uye_ekle_callback, pattern="^yeni_uye_ekle:"))
     app.add_handler(CallbackQueryHandler(yeni_uye_yoksay_callback, pattern="^yeni_uye_yoksay:"))
     app.add_handler(CallbackQueryHandler(egitim_handler.buton_handler))
+    # Grup mesajlarini dinle (gizlilik modu kapali olmali)
+    app.add_handler(MessageHandler(
+        filters.TEXT & filters.ChatType.GROUPS,
+        grup_mesaj_dinle
+    ))
+
+    # Ozel mesajlar
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, kayit_handler.metin_handler))
 
     # Bot baslarken mevcut grup uyelerini tara
