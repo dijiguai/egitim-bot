@@ -162,6 +162,7 @@ textarea.form-input{min-height:80px;resize:vertical}
   <div class="tab" onclick="sekme('calisanlar',this)">👥 Çalışanlar</div>
   <div class="tab" onclick="sekme('bekleyenler',this)" id="tab-btn-bekleyenler">🔔 Bekleyenler <span id="bekleyen-sayi" style="background:#e74c3c;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
   <div class="tab" onclick="sekme('istatistik',this)">📈 İstatistik</div>
+  <div class="tab" onclick="sekme('mesajlar',this)">💬 Grup Mesajları</div>
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
 </div>
 
@@ -220,6 +221,17 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 
   <!-- İSTATİSTİK -->
+  <div class="tab-content" id="tab-mesajlar">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="section-title" style="margin:0">Grup Mesaj Logları</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="mesaj-filtre" class="form-input" style="width:200px;padding:6px 10px" placeholder="İsim veya mesaj ara..." oninput="mesajFiltrele()">
+        <button class="btn btn-dark btn-sm" onclick="mesajLogYukle()">🔄 Yenile</button>
+      </div>
+    </div>
+    <div id="mesaj-log-liste"><div class="empty"><div class="empty-icon">💬</div>Yükleniyor...</div></div>
+  </div>
+
   <div class="tab-content" id="tab-istatistik">
     <div class="section-title">Eğitim Bazında Başarı Oranı</div>
     <div id="egitim-stats"><div class="loading"><div class="spinner"></div></div></div>
@@ -381,6 +393,7 @@ function sekme(ad, el) {
   if(ad==='calisanlar') calisanListesiYukle();
   if(ad==='bekleyenler') bekleyenleriYukle();
   if(ad==='egitimler') egitimListesiYukle();
+  if(ad==='mesajlar') mesajLogYukle();
 }
 
 // ── KAYITLAR ──────────────────────────────
@@ -437,6 +450,58 @@ function renderIstatistik(ozet) {
 }
 
 // ── ÇALIŞANLAR ────────────────────────────
+let tumMesajlar = [];
+
+async function mesajLogYukle() {
+  document.getElementById('mesaj-log-liste').innerHTML = '<div class="loading"><div class="spinner"></div>Yükleniyor...</div>';
+  try {
+    const r = await fetch('/panel/api/mesaj-loglari');
+    tumMesajlar = await r.json();
+    mesajFiltrele();
+  } catch(e) {
+    document.getElementById('mesaj-log-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>';
+  }
+}
+
+function mesajFiltrele() {
+  const filtre = (document.getElementById('mesaj-filtre')?.value || '').toLowerCase();
+  const liste = filtre
+    ? tumMesajlar.filter(m => m.ad.toLowerCase().includes(filtre) || m.mesaj.toLowerCase().includes(filtre))
+    : tumMesajlar;
+
+  if(!liste.length) {
+    document.getElementById('mesaj-log-liste').innerHTML = '<div class="empty"><div class="empty-icon">💬</div>Mesaj yok</div>';
+    return;
+  }
+
+  document.getElementById('mesaj-log-liste').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border);text-align:left">
+          <th style="padding:10px 12px;font-size:12px;color:var(--muted)">Saat</th>
+          <th style="padding:10px 12px;font-size:12px;color:var(--muted)">Kişi</th>
+          <th style="padding:10px 12px;font-size:12px;color:var(--muted)">Telegram ID</th>
+          <th style="padding:10px 12px;font-size:12px;color:var(--muted)">Mesaj</th>
+          <th style="padding:10px 12px;font-size:12px;color:var(--muted)">Durum</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${liste.slice().reverse().map(m => `
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 12px;font-size:12px;color:var(--muted);white-space:nowrap">${m.zaman}</td>
+            <td style="padding:8px 12px;font-size:13px;font-weight:600">${m.ad}<br><span style="font-size:11px;color:var(--muted);font-weight:400">${m.username||''}</span></td>
+            <td style="padding:8px 12px;font-size:11px;font-family:monospace;color:var(--muted)">${m.user_id}</td>
+            <td style="padding:8px 12px;font-size:13px;max-width:300px;overflow:hidden;text-overflow:ellipsis">${m.mesaj}</td>
+            <td style="padding:8px 12px">
+              ${m.kayitli
+                ? '<span style="color:var(--green);font-size:12px">✅ Kayıtlı</span>'
+                : '<span style="color:#e67e22;font-size:12px">⚠ Kayıtsız</span>'}
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
 async function manuelUyeEkle() {
   const uid = parseInt(document.getElementById('manuel-uid').value);
   if(!uid || isNaN(uid)) { alert('Gecerli bir Telegram ID girin'); return; }
@@ -1210,6 +1275,16 @@ def api_egitim_guncelle():
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/mesaj-loglari")
+def api_mesaj_loglari():
+    if not session.get("panel_giris"): return jsonify([]), 401
+    try:
+        from handlers.grup_handler import mesaj_loglari
+        return jsonify(list(mesaj_loglari))
+    except Exception as e:
+        return jsonify([])
 
 
 @app.route("/panel/api/bekleyen-manuel-ekle", methods=["POST"])
