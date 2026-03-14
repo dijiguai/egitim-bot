@@ -33,6 +33,17 @@ def flask_baslat():
     flask_app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 
+async def tum_mesajlar_handler(update, context):
+    """Tum metin mesajlarini yakala — grup ise grup_mesaj_dinle, ozel ise metin_handler."""
+    chat = update.effective_chat
+    if not chat:
+        return
+    if chat.type in ("group", "supergroup"):
+        await grup_mesaj_dinle(update, context)
+    elif chat.type == "private":
+        await kayit_handler.metin_handler(update, context)
+
+
 def main():
     TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not TOKEN:
@@ -58,7 +69,7 @@ def main():
     app.add_handler(CommandHandler("izinliler", izin_handler.izinliler_cmd))
     app.add_handler(CommandHandler("eksik", izin_handler.eksik_cmd))
 
-    # Gruba yeni uye katilimi
+    # Yeni uye
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, yeni_uye_handler))
 
     # Butonlar
@@ -66,17 +77,8 @@ def main():
     app.add_handler(CallbackQueryHandler(yeni_uye_yoksay_callback, pattern="^yeni_uye_yoksay:"))
     app.add_handler(CallbackQueryHandler(egitim_handler.buton_handler))
 
-    # GRUP mesajlari — ozel handler, once kayit edilmeli
-    app.add_handler(MessageHandler(
-        filters.TEXT & filters.ChatType.GROUPS,
-        grup_mesaj_dinle
-    ), group=0)
-
-    # OZEL mesajlar (group=1 ile sonra islenir)
-    app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
-        kayit_handler.metin_handler
-    ), group=1)
+    # Tum metin mesajlari — tek handler, iceride ayristir
+    app.add_handler(MessageHandler(filters.TEXT, tum_mesajlar_handler))
 
     async def post_init(application):
         await grup_uyelerini_tara(application)
