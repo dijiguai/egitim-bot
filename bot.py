@@ -34,13 +34,13 @@ def flask_baslat():
 
 
 async def tum_mesajlar_handler(update, context):
-    """Tum metin mesajlarini yakala — grup ise grup_mesaj_dinle, ozel ise metin_handler."""
+    """Tum mesajlari yakala — grup ise grup_mesaj_dinle, ozel ise metin_handler."""
     chat = update.effective_chat
     if not chat:
         return
     if chat.type in ("group", "supergroup"):
         await grup_mesaj_dinle(update, context)
-    elif chat.type == "private":
+    elif chat.type == "private" and update.message and update.message.text:
         await kayit_handler.metin_handler(update, context)
 
 
@@ -78,7 +78,7 @@ def main():
     app.add_handler(CallbackQueryHandler(egitim_handler.buton_handler))
 
     # Tum metin mesajlari — tek handler, iceride ayristir
-    app.add_handler(MessageHandler(filters.TEXT, tum_mesajlar_handler))
+    app.add_handler(MessageHandler(filters.ALL, tum_mesajlar_handler))
 
     async def post_init(application):
         await grup_uyelerini_tara(application)
