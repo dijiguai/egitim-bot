@@ -5,7 +5,7 @@ Is Basi Egitim Botu - Ana Dosya
 import logging, os, threading
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from handlers import egitim_handler, admin_handler, kayit_handler, izin_handler
-from handlers.grup_handler import yeni_uye_handler, yeni_uye_ekle_callback, yeni_uye_yoksay_callback
+from handlers.grup_handler import yeni_uye_handler, yeni_uye_ekle_callback, yeni_uye_yoksay_callback, grup_uyelerini_tara
 from panel import app as flask_app
 from scheduler import zamanlayici_baslat
 
@@ -66,6 +66,12 @@ def main():
     app.add_handler(CallbackQueryHandler(yeni_uye_yoksay_callback, pattern="^yeni_uye_yoksay:"))
     app.add_handler(CallbackQueryHandler(egitim_handler.buton_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, kayit_handler.metin_handler))
+
+    # Bot baslarken mevcut grup uyelerini tara
+    import asyncio
+    async def post_init(application):
+        await grup_uyelerini_tara(application)
+    app.post_init = post_init
 
     logger.info("Bot baslatiliyor...")
     app.run_polling(allowed_updates=["message", "callback_query", "chat_member"])
