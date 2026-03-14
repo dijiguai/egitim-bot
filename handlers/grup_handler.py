@@ -87,3 +87,34 @@ async def yeni_uye_yoksay_callback(update: Update, context: ContextTypes.DEFAULT
     user_id = int(query.data.split(":")[1])
     bilgi = yeni_uyeler.pop(user_id, {})
     await query.edit_message_text(f"❌ {bilgi.get('ad','?')} yoksayildi.")
+
+
+async def grup_uyelerini_tara(app):
+    """
+    Bot baslarken grup uyelerini tarar, sistemde olmayanlari yeni_uyeler'e ekler.
+    Boylece onceden gruptaki uyeler de Bekleyenler sekmesinde gorunur.
+    """
+    from config import GRUP_ID
+    from calisanlar import tum_calisanlar
+
+    if not GRUP_ID or GRUP_ID == 0:
+        return
+
+    try:
+        kayitlilar = tum_calisanlar()
+        kayitli_idler = {k for k in kayitlilar.keys() if k > 0}
+
+        # Grup uyelerini cek
+        uyeler = await app.bot.get_chat_administrators(GRUP_ID)
+        for uye in uyeler:
+            u = uye.user
+            if u.is_bot or u.id in kayitli_idler or u.id in yeni_uyeler:
+                continue
+            ad = f"{u.first_name or ''} {u.last_name or ''}".strip()
+            username = f"@{u.username}" if u.username else ""
+            yeni_uyeler[u.id] = {"ad": ad, "username": username}
+            logger.info(f"Mevcut uye tespit edildi: {ad} ({u.id})")
+
+        logger.info(f"Grup tarama tamamlandi: {len(yeni_uyeler)} kayitsiz uye")
+    except Exception as e:
+        logger.warning(f"Grup tarama hatasi: {e}")
