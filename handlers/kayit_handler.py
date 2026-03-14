@@ -71,15 +71,15 @@ async def metin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await kimlik_dogrula(update, context, user_id, durum)
         return
 
-    # Grup mesaji — yeni uye tespiti
+    # Grup mesaji — kayitsiz uye tespiti
     chat = update.effective_chat
-    if chat and hasattr(chat, 'type') and chat.type != "private":
+    if chat and hasattr(chat, 'type') and chat.type in ("group", "supergroup"):
         try:
-            from calisanlar import calisan_bul
-            if not calisan_bul(user_id) and user_id not in ADMIN_IDS:
-                await _admin_bildir(context, user)
-        except:
-            pass
+            from handlers.grup_handler import grup_mesaj_dinle
+            await grup_mesaj_dinle(update, context)
+        except Exception as e:
+            logger.warning(f"Grup mesaj dinleme hatasi: {e}")
+        return
 
 
 async def dogum_ile_dogrula(update, context, user_id, durum):
