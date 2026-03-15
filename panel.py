@@ -565,68 +565,56 @@ async function firmaGuncelle(firma_id) {
 }
 
 function firmaAc(firma_id, firma_adi) {
+  // 1. Aktif firmay set et
   aktifFirma = firma_id;
-  // Sayfa yenilemede hatirla
-  try { sessionStorage.setItem('aktifFirma', firma_id); sessionStorage.setItem('aktifFirmaAdi', firma_adi); } catch(e){}
+  try {
+    sessionStorage.setItem('aktifFirma', firma_id);
+    sessionStorage.setItem('aktifFirmaAdi', firma_adi);
+  } catch(e) {}
+
+  // 2. Ana sayfayi gizle, panel sekmelerini goster
+  document.getElementById('ana-sayfa').style.display = 'none';
+  document.getElementById('filtre-bar').style.display = 'none';
+  document.getElementById('ana-tabs').style.display = 'flex';
+  document.getElementById('geri-btn').style.display = 'inline-flex';
   document.getElementById('aktif-firma-adi').textContent = firma_adi;
   document.getElementById('aktif-firma-adi').style.display = 'inline';
-  document.getElementById('ana-sayfa').style.display = 'none';
-  document.getElementById('ana-tabs').style.display = 'flex';
-  document.getElementById('geri-btn').style.display = 'inline-flex';
-  // Tab iceriklerinin style'ini temizle
-  document.querySelectorAll('.tab-content').forEach(t=>{ t.style.display=''; t.classList.remove('active'); });
-  // Kayitlar sekmesini ac ve verileri yukle
-  const ilkTab = document.querySelector('.tab');
-  if(ilkTab) {
-    ilkTab.classList.add('active');
-    const tabEl = document.getElementById('tab-kayitlar');
-    if(tabEl) { tabEl.classList.add('active'); tabEl.style.display = ''; }
-    document.getElementById('filtre-bar').style.display = 'flex';
-    setTimeout(() => verileriYukle(), 50);
-  }
-}
 
-let firmalarListesi = [];
+  // 3. Tum tab iceriklerini gizle, style temizle
+  document.querySelectorAll('.tab-content').forEach(t => {
+    t.classList.remove('active');
+    t.style.display = '';
+  });
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+
+  // 4. Kayitlar sekmesini aktif yap
+  const ilkTab = document.querySelector('.tab');
+  const kayitlarTab = document.getElementById('tab-kayitlar');
+  if(ilkTab) ilkTab.classList.add('active');
+  if(kayitlarTab) kayitlarTab.classList.add('active');
+  document.getElementById('filtre-bar').style.display = 'flex';
+
+  // 5. Veriyi yukle
+  verileriYukle();
+}
 
 function anaSeyfayaDon() {
-  try { sessionStorage.removeItem('aktifFirma'); sessionStorage.removeItem('aktifFirmaAdi'); } catch(e){}
+  try {
+    sessionStorage.removeItem('aktifFirma');
+    sessionStorage.removeItem('aktifFirmaAdi');
+  } catch(e) {}
   aktifFirma = null;
+
   document.getElementById('ana-tabs').style.display = 'none';
-  document.getElementById('ana-sayfa').style.display = 'block';
   document.getElementById('filtre-bar').style.display = 'none';
-  document.querySelectorAll('.tab-content').forEach(el => { el.classList.remove('active'); el.style.display = ''; });
-  if(document.getElementById('aktif-firma-adi')) document.getElementById('aktif-firma-adi').style.display = 'none';
-  if(document.getElementById('geri-btn')) document.getElementById('geri-btn').style.display = 'none';
-  firmaKartlariniYukle();
-  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+  document.getElementById('ana-sayfa').style.display = 'block';
   document.getElementById('geri-btn').style.display = 'none';
   document.getElementById('aktif-firma-adi').style.display = 'none';
-  firmalariYukle();
-}
-
-function firmaAc(firma_id, firma_ad) {
-  aktifFirma = firma_id;
-  document.getElementById('ana-sayfa').style.display = 'none';
-  document.getElementById('ana-tabs').style.display = 'flex';
-  document.getElementById('geri-btn').style.display = 'inline-flex';
-  // Tab iceriklerinin style'ini temizle
-  document.querySelectorAll('.tab-content').forEach(t=>{ t.style.display=''; t.classList.remove('active'); });
-  document.getElementById('geri-btn').style.display = 'inline-block';
-  document.getElementById('aktif-firma-adi').textContent = firma_ad;
-  document.getElementById('aktif-firma-adi').style.display = 'inline';
-  // Kayitlar sekmesini ac
-  sekme('kayitlar', document.querySelector('.tab'));
-  document.querySelectorAll('.tab')[0].click();
-}
-
-async function firmalariYukle() {
-  try {
-    const r = await fetch('/panel/api/firmalar');
-    firmalarListesi = await r.json();
-    renderFirmaKartlari(firmalarListesi);
-  } catch(e) {
-    document.getElementById('firma-kartlari').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Firmalar yüklenemedi</div>';
-  }
+  document.querySelectorAll('.tab-content').forEach(t => {
+    t.classList.remove('active');
+    t.style.display = '';
+  });
+  firmaKartlariniYukle();
 }
 
 function renderFirmaKartlari(firmalar) {
