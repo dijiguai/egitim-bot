@@ -29,6 +29,16 @@ def egitimler_yukle():
         logger.error(f"Egitim yukleme hatasi: {e}")
 
 
+def firmalar_yukle():
+    """Baslangicta Firmalar sekmesini hazirla, varsayilan firmay ekle."""
+    try:
+        from firma_manager import varsayilan_firma_kontrol
+        varsayilan_firma_kontrol()
+        logger.info("Firmalar yuklendi")
+    except Exception as e:
+        logger.error(f"Firma yukleme hatasi: {e}")
+
+
 def flask_baslat():
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -51,6 +61,7 @@ def main():
         raise ValueError("TELEGRAM_BOT_TOKEN ayarlanmamis!")
 
     egitimler_yukle()
+    firmalar_yukle()
     threading.Thread(target=flask_baslat, daemon=True).start()
 
     app = Application.builder().token(TOKEN).build()
