@@ -89,10 +89,23 @@ async def grup_mesaj_dinle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"Grup mesaji alindi: chat_id={chat.id}, GRUP_ID={GRUP_ID}")
 
-    # Sadece hedef grubu dinle
-    if str(chat.id) != str(GRUP_ID):
-        logger.info(f"Farkli grup, atlandi: {chat.id}")
-        return
+    # Hangi firmaya ait oldugunu bul
+    firma_id = None
+    try:
+        from firma_manager import grup_id_den_firma
+        firma_id, _ = grup_id_den_firma(chat.id)
+    except:
+        pass
+
+    # Bilinen bir firma grubu mu?
+    if not firma_id:
+        # Eski sistem ile kontrol
+        if str(chat.id) != str(GRUP_ID):
+            logger.info(f"Bilinmeyen grup, atlandi: {chat.id}")
+            return
+        firma_id = "varsayilan"
+
+    logger.info(f"Grup mesaji: firma={firma_id}, chat={chat.id}")
 
     user = update.effective_user
     if not user or user.is_bot:
