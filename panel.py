@@ -160,7 +160,7 @@ textarea.form-input{min-height:80px;resize:vertical}
 <div class="tabs">
   <div class="tab active" onclick="sekme('kayitlar',this)">📊 Kayıtlar</div>
   <div class="tab" onclick="sekme('calisanlar',this)">👥 Çalışanlar</div>
-  <div class="tab" onclick="sekme('bekleyenler',this)" id="tab-btn-bekleyenler">🔔 Bekleyenler <span id="bekleyen-sayi" style="background:#e74c3c;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;display:none">0</span></div>
+
   <div class="tab" onclick="sekme('istatistik',this)">📈 İstatistik</div>
   <div class="tab" onclick="sekme('mesajlar',this)">💬 Grup Mesajları</div>
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
@@ -200,18 +200,6 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 
   <!-- ÇALIŞANLAR -->
-  <div class="tab-content" id="tab-bekleyenler">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div class="section-title" style="margin:0">Gruba Bağlı Olup Sistemde Olmayan Üyeler</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" id="manuel-uid" class="form-input" style="width:180px;padding:6px 10px" placeholder="Telegram ID gir...">
-        <button class="btn btn-primary btn-sm" onclick="manuelUyeEkle()">+ Ekle</button>
-        <button class="btn btn-dark btn-sm" onclick="bekleyenleriYukle()">🔄 Yenile</button>
-      </div>
-    </div>
-    <div id="bekleyen-liste"><div class="empty"><div class="empty-icon">🔔</div>Yükleniyor...</div></div>
-  </div>
-
   <div class="tab-content" id="tab-calisanlar">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div class="section-title" style="margin:0">Çalışan Listesi</div>
@@ -411,7 +399,6 @@ function sekme(ad, el) {
   el.classList.add('active');
   document.getElementById('filtre-bar').style.display = (ad==='calisanlar'||ad==='egitimler') ? 'none' : 'flex';
   if(ad==='calisanlar') calisanListesiYukle();
-  if(ad==='bekleyenler') bekleyenleriYukle();
   if(ad==='egitimler') egitimListesiYukle();
   if(ad==='mesajlar') mesajLogYukle();
 }
@@ -1122,15 +1109,38 @@ def api_kayitlar():
 @app.route("/panel/api/calisanlar")
 def api_calisanlar():
     if not session.get("panel_giris"): return jsonify([]),401
-    from config import EGITIMLER
-    from durum import eksik_egitimler, izinli_mi
-    calisanlar=tum_calisanlar()
-    bugun=date.today().strftime("%d.%m.%Y")
-    sonuc=[]
-    from durum import bugun_tamamlayanlar
+    from config import EGITIMLER, BOT_USERNAME
+    from durum import izinli_mi, bugun_tamamlayanlar
+    from sheets import tum_kayitlar_getir
+
+    calisanlar = tum_calisanlar()
+    bugun = date.today().strftime("%d.%m.%Y")
     bugun_tamamlayan_listesi = bugun_tamamlayanlar(bugun)
+    toplam_egitim = len(EGITIMLER)
+
+    # Tum kayitlari TEK SEFERDE cek — her calisan icin ayri cekme
+    try:
+        tum_kayitlar = tum_kayitlar_getir()
+    except:
+        tum_kayitlar = []
+
+    # Her calisan icin gecilen egitimleri hesapla
+    def gecilen_egitimler_hesapla(tid):
+        gecilen = set()
+        for k in tum_kayitlar:
+            if str(k.get("telegram_id","")) == str(tid):
+                if k.get("durum","") in ("GECTI","GECTİ"):
+                    konu = k.get("egitim_konusu","")
+                    for eid, e in EGITIMLER.items():
+                        if e.get("baslik","") == konu:
+                            gecilen.add(eid)
+                            break
+        return gecilen
+
+    sonuc = []
     for tid, c in calisanlar.items():
-        eksik=eksik_egitimler(tid)
+        gecilen = gecilen_egitimler_hesapla(tid)
+        tamamlanan = len(gecilen)
         sonuc.append({
             "telegram_id": tid,
             "ad_soyad": c["ad_soyad"],
@@ -1138,10 +1148,10 @@ def api_calisanlar():
             "dogum_tarihi": c["dogum_tarihi"],
             "bugun_izinli": izinli_mi(tid, bugun),
             "bugun_tamamladi": str(tid) in bugun_tamamlayan_listesi,
-            "tamamlanan": len(EGITIMLER)-len(eksik),
-            "toplam_egitim": len(EGITIMLER)
+            "tamamlanan": tamamlanan,
+            "toplam_egitim": toplam_egitim
         })
-    from config import BOT_USERNAME
+
     return jsonify({"calisanlar": sonuc, "bot_username": BOT_USERNAME})
 
 @app.route("/panel/api/calisan-ekle", methods=["POST"])
