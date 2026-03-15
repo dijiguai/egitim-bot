@@ -154,8 +154,16 @@ textarea.form-input{min-height:80px;resize:vertical}
 
 {% else %}
 <div class="header">
-  <div class="header-logo"><div class="logo-dot"></div>Eğitim Paneli</div>
-  <a href="/panel/cikis"><button class="logout-btn">Çıkış</button></a>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="header-logo"><div class="logo-dot"></div>Eğitim Paneli</div>
+    <select id="firma-secici" onchange="firmaSecildi(this.value)" style="padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:13px;cursor:pointer;max-width:200px">
+      <option value="">⏳ Yükleniyor...</option>
+    </select>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button class="logout-btn" onclick="firmaEkleModalAc()" style="background:var(--primary);color:#fff">+ Firma</button>
+    <a href="/panel/cikis"><button class="logout-btn">Çıkış</button></a>
+  </div>
 </div>
 <div class="tabs">
   <div class="tab active" onclick="sekme('kayitlar',this)">📊 Kayıtlar</div>
@@ -345,6 +353,29 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 </div>
 
+<div class="modal-overlay" id="firma-ekle-modal">
+  <div class="modal">
+    <div class="modal-title">Yeni Firma Ekle</div>
+    <div class="modal-sub">Bot bu gruba eklenmiş olmalı ve grup ID'sini bilmeniz gerekiyor.</div>
+    <div class="form-group">
+      <label class="form-label">Firma Adı *</label>
+      <input type="text" class="form-input" id="f-ad" placeholder="örn: Baştaş Avcılar">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Telegram Grup ID *</label>
+      <input type="text" class="form-input" id="f-grupid" placeholder="örn: -1001234567890">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">
+        Grup ID'sini bulmak için gruba <code>@userinfobot</code>'u ekleyin veya Railway loglarından öğrenin.
+      </div>
+    </div>
+    <div id="f-hata" class="alert alert-red" style="display:none"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="firmaKaydet()">Kaydet</button>
+      <button class="btn btn-dark" onclick="modalKapat('firma-ekle-modal')">İptal</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="sil-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-title">Çalışanı Sil</div>
@@ -404,6 +435,75 @@ function sekme(ad, el) {
 }
 
 // ── KAYITLAR ──────────────────────────────
+// Aktif firma
+let aktifFirma = "varsayilan";
+
+function firmaSecildi(firma_id) {
+  aktifFirma = firma_id || "varsayilan";
+  // Mevcut sekmeyi yenile
+  const aktifTab = document.querySelector('.tab.active');
+  if(aktifTab) aktifTab.click();
+}
+
+async function firmalariYukle() {
+  try {
+    const r = await fetch('/panel/api/firmalar');
+    const d = await r.json();
+    const sec = document.getElementById('firma-secici');
+    sec.innerHTML = d.map(f =>
+      `<option value="${f.firma_id}">${f.ad}</option>`
+    ).join('');
+    if(d.length > 0) {
+      aktifFirma = d[0].firma_id;
+      sec.value = aktifFirma;
+    }
+  } catch(e) {
+    console.error('Firmalar yuklenemedi:', e);
+  }
+}
+
+function firmaEkleModalAc() {
+  document.getElementById('f-ad').value = '';
+  document.getElementById('f-grupid').value = '';
+  document.getElementById('f-hata').style.display = 'none';
+  document.getElementById('firma-ekle-modal').classList.add('open');
+}
+
+async function firmaKaydet() {
+  const ad = document.getElementById('f-ad').value.trim();
+  const grupid = document.getElementById('f-grupid').value.trim();
+  const hataEl = document.getElementById('f-hata');
+
+  if(!ad || !grupid) {
+    hataEl.textContent = 'Tüm alanları doldurun.';
+    hataEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const r = await fetch('/panel/api/firma-ekle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ad, grup_id: grupid})
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      modalKapat('firma-ekle-modal');
+      await firmalariYukle();
+      // Yeni firmaya gec
+      document.getElementById('firma-secici').value = d.firma_id;
+      firmaSecildi(d.firma_id);
+      alert(`"${ad}" firması başarıyla eklendi! Sheets'te gerekli sekmeler otomatik oluşturuldu.`);
+    } else {
+      hataEl.textContent = 'Hata: ' + (d.hata || 'Bilinmeyen');
+      hataEl.style.display = 'block';
+    }
+  } catch(e) {
+    hataEl.textContent = 'Bağlantı hatası';
+    hataEl.style.display = 'block';
+  }
+}
+
 async function verileriYukle() {
   const bas = document.getElementById('tarih-bas').value.split('-').reverse().join('.');
   const bitis = document.getElementById('tarih-bitis').value.split('-').reverse().join('.');
@@ -411,7 +511,7 @@ async function verileriYukle() {
   document.getElementById('kayit-tb').innerHTML='<tr><td colspan="8"><div class="loading"><div class="spinner"></div>Yükleniyor...</div></td></tr>';
   document.getElementById('egitim-stats').innerHTML='<div class="loading"><div class="spinner"></div></div>';
   try {
-    const r = await fetch(`/panel/api/kayitlar?bas=${bas}&bitis=${bitis}&durum=${encodeURIComponent(durum)}`);
+    const r = await fetch(`/panel/api/kayitlar?bas=${bas}&bitis=${bitis}&durum=${encodeURIComponent(durum)}&firma_id=${aktifFirma}`);
     const d = await r.json();
     renderKayitlar(d.kayitlar);
     renderIstatistik(d.egitim_ozet);
@@ -604,7 +704,7 @@ async function bekleyenBildir(userId, ad, btn) {
 async function calisanListesiYukle() {
   document.getElementById('calisan-liste').innerHTML='<div class="loading"><div class="spinner"></div></div>';
   try {
-    const r = await fetch('/panel/api/calisanlar');
+    const r = await fetch(`/panel/api/calisanlar?firma_id=${aktifFirma}`);
     const resp = await r.json();
     const d = Array.isArray(resp) ? resp : resp.calisanlar;
     window._botUsername = Array.isArray(resp) ? 'BasTasEgitimBot' : (resp.bot_username || 'BasTasEgitimBot');
@@ -1087,7 +1187,8 @@ def cikis():
 def api_kayitlar():
     if not session.get("panel_giris"): return jsonify({"hata":"Yetkisiz"}),401
     bas=request.args.get("bas",""); bitis=request.args.get("bitis",""); df=request.args.get("durum","")
-    try: kayitlar=tum_kayitlar_getir()
+    firma_id=request.args.get("firma_id","varsayilan")
+    try: kayitlar=tum_kayitlar_getir(firma_id)
     except Exception as e: return jsonify({"hata":str(e),"kayitlar":[],"egitim_ozet":{}})
     def aralik(t):
         try:
@@ -1115,14 +1216,15 @@ def api_calisanlar():
     from durum import izinli_mi, bugun_tamamlayanlar
     from sheets import tum_kayitlar_getir
 
-    calisanlar = tum_calisanlar()
+    firma_id = request.args.get("firma_id", "varsayilan")
+    calisanlar = tum_calisanlar(firma_id)
     bugun = date.today().strftime("%d.%m.%Y")
     bugun_tamamlayan_listesi = bugun_tamamlayanlar(bugun)
     toplam_egitim = len(EGITIMLER)
 
     # Tum kayitlari TEK SEFERDE cek — her calisan icin ayri cekme
     try:
-        tum_kayitlar = tum_kayitlar_getir()
+        tum_kayitlar = tum_kayitlar_getir(firma_id)
     except:
         tum_kayitlar = []
 
@@ -1664,6 +1766,53 @@ def api_kayit_butonu_gonder():
         if result.get("ok"):
             return jsonify({"basarili":True})
         return jsonify({"basarili":False,"hata":result.get("description","")})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/firmalar")
+def api_firmalar():
+    if not session.get("panel_giris"): return jsonify([]), 401
+    try:
+        from firma_manager import tum_firmalar
+        firmalar = tum_firmalar(force=True)
+        return jsonify([
+            {"firma_id": fid, "ad": f["ad"], "grup_id": f["grup_id"]}
+            for fid, f in firmalar.items()
+        ])
+    except Exception as e:
+        return jsonify([{"firma_id": "varsayilan", "ad": "Varsayılan", "grup_id": 0}])
+
+
+@app.route("/panel/api/firma-ekle", methods=["POST"])
+def api_firma_ekle():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}), 401
+    veri = request.get_json()
+    ad = veri.get("ad","").strip()
+    grup_id_str = str(veri.get("grup_id","")).strip()
+
+    if not ad or not grup_id_str:
+        return jsonify({"basarili":False,"hata":"Ad ve grup ID zorunlu"})
+
+    try:
+        grup_id = int(grup_id_str)
+    except:
+        return jsonify({"basarili":False,"hata":"Geçersiz grup ID formatı"})
+
+    # Firma ID olustur (Turkce karaktersiz, kucuk harf)
+    import re, unicodedata
+    firma_id = unicodedata.normalize('NFKD', ad.lower())
+    firma_id = firma_id.encode('ascii','ignore').decode('ascii')
+    firma_id = re.sub(r'[^a-z0-9]', '_', firma_id)
+    firma_id = re.sub(r'_+', '_', firma_id).strip('_')[:20]
+
+    try:
+        from firma_manager import firma_ekle, tum_firmalar
+        # Zaten var mi?
+        if firma_id in tum_firmalar():
+            firma_id = firma_id + "_2"
+        firma_ekle(firma_id, ad, grup_id)
+        return jsonify({"basarili":True,"firma_id":firma_id})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
 
