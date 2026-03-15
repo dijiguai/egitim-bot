@@ -1221,26 +1221,35 @@ Ek notlar: {notlar if notlar else "Yok"}
 SADECE JSON döndür:
 {{"id":"ingilizce_kisa_anahtar","baslik":"Emoji + Türkçe başlık","tur":"İş Güvenliği","sure":"~XX dakika","metin":"Telegram Markdown eğitim metni, *kalın* kullan, 5 bölüm olsun","sorular":[{{"soru":"?","secenekler":["A","B","C","D"],"dogru":0}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":1}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":2}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":0}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":3}}]}}"""
     try:
-        import urllib.request
-        payload=json.dumps({"model":"claude-sonnet-4-5","max_tokens":2000,"messages":[{"role":"user","content":prompt}]}).encode()
-        req=urllib.request.Request("https://api.anthropic.com/v1/messages",data=payload,
-            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"},method="POST")
-        with urllib.request.urlopen(req,timeout=60) as resp:
-            yanit=json.loads(resp.read().decode())
-        icerik=yanit["content"][0]["text"].strip()
-        icerik=re.sub(r"^```json\s*","",icerik); icerik=re.sub(r"^```\s*","",icerik); icerik=re.sub(r"\s*```$","",icerik).strip()
-        egitim=json.loads(icerik)
-        yeni = {"baslik":egitim["baslik"],"tur":egitim["tur"],"sure":egitim["sure"],"metin":egitim["metin"],"sorular":egitim["sorular"]}
+        import requests as req_lib
+        resp = req_lib.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01"
+            },
+            json={"model": "claude-opus-4-5", "max_tokens": 2000, "messages": [{"role": "user", "content": prompt}]},
+            timeout=60
+        )
+        if not resp.ok:
+            return jsonify({"basarili": False, "hata": f"API Hata {resp.status_code}: {resp.text[:300]}"})
+        yanit = resp.json()
+        icerik = yanit["content"][0]["text"].strip()
+        icerik = re.sub(r"^```json\s*", "", icerik)
+        icerik = re.sub(r"^```\s*", "", icerik)
+        icerik = re.sub(r"\s*```$", "", icerik).strip()
+        egitim = json.loads(icerik)
+        yeni = {"baslik": egitim["baslik"], "tur": egitim["tur"], "sure": egitim["sure"], "metin": egitim["metin"], "sorular": egitim["sorular"]}
         EGITIMLER[egitim["id"]] = yeni
-        # Sheets'e de kaydet
         try:
             from egitimler_sheets import egitim_ekle
             egitim_ekle(egitim["id"], egitim["baslik"], egitim["tur"], egitim["sure"], egitim["metin"], egitim["sorular"])
         except Exception as se:
             logger.warning(f"Sheets kayit hatasi: {se}")
-        return jsonify({"basarili":True,"id":egitim["id"],"baslik":egitim["baslik"]})
+        return jsonify({"basarili": True, "id": egitim["id"], "baslik": egitim["baslik"]})
     except Exception as e:
-        return jsonify({"basarili":False,"hata":str(e)})
+        return jsonify({"basarili": False, "hata": str(e)})
 
 @app.route("/panel/api/egitim-gonder", methods=["POST"])
 def api_egitim_gonder():
