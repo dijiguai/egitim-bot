@@ -1,8 +1,8 @@
 """
-Kimlik dogrulama + otomatik uye tanima
+Kimlik dogrulama + otomatik kayit akisi
 """
 
-import logging, datetime
+import logging, datetime, re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from config import ADMIN_IDS, GECME_NOTU
@@ -19,21 +19,27 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         return
     user_id = user.id
-
-    # Grup butonundan gelen start parametresi: /start egitim_forklift_guvenligi
     args = context.args
+
+    # Egitim baslat
     if args and args[0].startswith("egitim_"):
         egitim_id = args[0].replace("egitim_", "", 1)
         from handlers.egitim_handler import egitim_baslat
         await egitim_baslat(update, context, user_id, egitim_id)
         return
 
-    # Normal /start
+    # Kayit akisi
+    if args and args[0] == "kayit":
+        await _kayit_baslat(update, context, user_id)
+        return
+
+    # Admin
     if user_id in ADMIN_IDS:
         from handlers.admin_handler import start as admin_start
         await admin_start(update, context)
         return
 
+    # Kayitli mi?
     try:
         from calisanlar import calisan_bul
         calisan = calisan_bul(user_id)
@@ -43,16 +49,31 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if calisan:
         await update.message.reply_text(
             f"Merhaba *{calisan['ad_soyad'].split()[0]}*!\n\n"
-            f"Sabah 08:00'de gunun egitimi otomatik gelir.",
+            f"Sisteme kayitlisiniz. Sabah 08:00'de egitim bildirimi alacaksiniz.",
             parse_mode="Markdown"
         )
     else:
-        await update.message.reply_text(
-            "Merhaba!\n\n"
-            "Gruptan gelen egitim butonuna basarak egitime katilabilirsiniz.\n"
-            "Ilk katilimda dogum tarihiniz sorulacak."
+        await _kayit_baslat(update, context, user_id)
+
+
+async def _kayit_baslat(update, context, user_id):
+    """Kendi kendine kayit akisini baslat."""
+    kullanici_durum[user_id] = {
+        "kayit_akisi": True,
+        "adim": "ad_soyad",
+        "ad_soyad": "",
+        "dogum_tarihi": "",
+        "gorev": "",
+    }
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=(
+            "Hos geldiniz! Kayit olmak icin birkaç adim var.\n\n"
+            "Adim 1/3\n"
+            "Ad ve soyadinizi girin:\n"
+            "(Ornek: Ahmet Yilmaz)"
         )
-        await _admin_bildir(context, user)
+    )
 
 
 async def metin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -63,6 +84,11 @@ async def metin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     durum = kullanici_durum.get(user_id, {})
 
+    # Kendi kendine kayit akisi
+    if durum.get("kayit_akisi"):
+        await _kayit_adim_isle(update, context, user_id, durum)
+        return
+
     if durum.get("dogum_dogrulama"):
         await dogum_ile_dogrula(update, context, user_id, durum)
         return
@@ -71,10 +97,129 @@ async def metin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await kimlik_dogrula(update, context, user_id, durum)
         return
 
-    # Grup mesajlari bot.py'deki ayri handler tarafindan islenir
+    # Grup mesajlari ayri handler'da islenir
     chat = update.effective_chat
     if chat and hasattr(chat, 'type') and chat.type in ("group", "supergroup"):
         return
+
+
+async def _kayit_adim_isle(update, context, user_id, durum):
+    """Kayit akisinin her adimini isle."""
+    from calisanlar import calisan_ekle
+    metin = update.message.text.strip()
+    adim = durum.get("adim")
+
+    if adim == "ad_soyad":
+        if len(metin) < 3:
+            await update.message.reply_text("Lutfen gercek ad soyadinizi girin (en az 3 karakter):")
+            return
+        durum["ad_soyad"] = metin
+        durum["adim"] = "dogum_tarihi"
+        kullanici_durum[user_id] = durum
+        await update.message.reply_text(
+            f"Adim 2/3\n"
+            f"Dogum tarihinizi girin:\n"
+            f"Format: GG.AA.YYYY\n"
+            f"Ornek: 15.06.1990"
+        )
+
+    elif adim == "dogum_tarihi":
+        if not re.match(r"^\d{2}\.\d{2}\.\d{4}$", metin):
+            await update.message.reply_text(
+                "Gecersiz format. Lutfen GG.AA.YYYY seklinde girin:\n"
+                "Ornek: 15.06.1990"
+            )
+            return
+        durum["dogum_tarihi"] = metin
+        durum["adim"] = "gorev"
+        kullanici_durum[user_id] = durum
+        await update.message.reply_text(
+            "Adim 3/3\n"
+            "Gorev veya unvaninizi girin:\n"
+            "(Ornek: Forklift Operatoru, Teknisyen, Muhasebe vb.)"
+        )
+
+    elif adim == "gorev":
+        if len(metin) < 2:
+            await update.message.reply_text("Lutfen gorev/unvaninizi girin:")
+            return
+        durum["gorev"] = metin
+        durum["adim"] = "onay"
+        kullanici_durum[user_id] = durum
+
+        keyboard = [[
+            InlineKeyboardButton("Kaydet", callback_data=f"kayit_onayla:{user_id}"),
+            InlineKeyboardButton("Iptal", callback_data=f"kayit_iptal:{user_id}")
+        ]]
+        await update.message.reply_text(
+            f"Bilgilerinizi kontrol edin:\n\n"
+            f"Ad Soyad: {durum['ad_soyad']}\n"
+            f"Dogum Tarihi: {durum['dogum_tarihi']}\n"
+            f"Gorev: {durum['gorev']}\n\n"
+            f"Kaydetmek istiyor musunuz?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+
+async def kayit_onayla_callback(update, context):
+    """Kayit onay butonu."""
+    query = update.callback_query
+    await query.answer()
+    user_id = int(query.data.split(":")[1])
+
+    if query.from_user.id != user_id:
+        return
+
+    durum = kullanici_durum.get(user_id, {})
+    if not durum.get("kayit_akisi"):
+        return
+
+    from calisanlar import calisan_ekle, calisan_bul
+
+    # Zaten kayitli mi?
+    if calisan_bul(user_id):
+        await query.edit_message_text("Zaten sisteme kayitlisiniz.")
+        kullanici_durum.pop(user_id, None)
+        return
+
+    try:
+        calisan_ekle(user_id, durum["ad_soyad"], durum["dogum_tarihi"], durum["gorev"])
+        kullanici_durum.pop(user_id, None)
+
+        await query.edit_message_text(
+            f"Kaydiniz tamamlandi!\n\n"
+            f"Ad: {durum['ad_soyad']}\n"
+            f"Gorev: {durum['gorev']}\n\n"
+            f"Artik sabah 08:00'de gunluk egitim bildirimi alacaksiniz."
+        )
+
+        # Admin'e bildir
+        for admin_id in ADMIN_IDS:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        f"Yeni calisan kaydoldu!\n\n"
+                        f"Ad: {durum['ad_soyad']}\n"
+                        f"Dogum: {durum['dogum_tarihi']}\n"
+                        f"Gorev: {durum['gorev']}\n"
+                        f"Telegram ID: {user_id}"
+                    )
+                )
+            except:
+                pass
+
+    except Exception as e:
+        logger.error(f"Kayit hatasi: {e}")
+        await query.edit_message_text(f"Kayit sirasinda hata olustu: {e}\n\nLutfen yoneticinizle iletisime gecin.")
+
+
+async def kayit_iptal_callback(update, context):
+    query = update.callback_query
+    await query.answer()
+    user_id = int(query.data.split(":")[1])
+    kullanici_durum.pop(user_id, None)
+    await query.edit_message_text("Kayit iptal edildi. Tekrar baslamak icin /start yazin.")
 
 
 async def dogum_ile_dogrula(update, context, user_id, durum):
@@ -114,8 +259,8 @@ async def dogum_ile_dogrula(update, context, user_id, durum):
 async def kimlik_dogrula(update, context, user_id, durum):
     from calisanlar import calisan_bul, calisan_bul_dogum
     girilen = update.message.text.strip()
-
     calisan = calisan_bul(user_id)
+
     if calisan:
         dogru = calisan.get("dogum_tarihi", "")
         eslesti = (girilen == dogru or girilen == dogru.split(".")[-1])
@@ -156,8 +301,8 @@ async def sinav_tamamla_direkt(context, user_id, durum, calisan=None, guncelle=N
     puan = round(dogru / toplam * 100) if toplam else 0
     gecti = puan >= GECME_NOTU
     simdi = datetime.datetime.now()
-
     deneme_no = durum.get("deneme_no", 1)
+
     try:
         kayit_ekle({
             "tarih": simdi.strftime("%d.%m.%Y"),
@@ -181,10 +326,9 @@ async def sinav_tamamla_direkt(context, user_id, durum, calisan=None, guncelle=N
 
     kullanici_durum.pop(user_id, None)
 
-    ad = calisan['ad_soyad'].split()[0]
     deneme_txt = f" ({deneme_no}. denemede)" if deneme_no > 1 else ""
     if gecti:
-        mesaj = f"Tebrikler {ad}!\n\nEgitimi gecdiniz{deneme_txt}!\nPuaniniz: {puan}/100\n\nIyi calismalar!"
+        mesaj = f"Tebrikler {calisan['ad_soyad'].split()[0]}!\n\nEgitimi gecdiniz{deneme_txt}!\nPuaniniz: {puan}/100\n\nIyi calismalar!"
     else:
         mesaj = f"Egitim Sonucu\n\nGecemediniz.\nPuaniniz: {puan}/100 (Gecme: {GECME_NOTU})\n\nYoneticiniz ek hak tanimlarsa tekrar girebilirsiniz."
 
@@ -201,22 +345,17 @@ async def _admin_bildir(context, user):
     ad = f"{user.first_name or ''} {user.last_name or ''}".strip() or f"Kullanici {user_id}"
     username = f"@{user.username}" if user.username else ""
     onay_bekleyenler[user_id] = {"ad": ad, "username": username}
-
     keyboard = [[
         InlineKeyboardButton("Sisteme Ekle", callback_data=f"uye_ekle:{user_id}"),
         InlineKeyboardButton("Yoksay", callback_data=f"uye_yoksay:{user_id}")
     ]]
-
     for admin_id in ADMIN_IDS:
         try:
             await context.bot.send_message(
                 chat_id=admin_id,
                 text=(
-                    f"Yeni uye!\n\n"
-                    f"Ad: {ad}\n"
-                    f"Kullanici adi: {username}\n"
-                    f"Telegram ID: {user_id}\n\n"
-                    f"Panelden ekleyin (ID girmek zorunda degilsiniz)."
+                    f"Yeni uye!\n\nAd: {ad}\nKullanici adi: {username}\nID: {user_id}\n\n"
+                    f"Panelden ekleyin."
                 ),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
@@ -228,7 +367,7 @@ async def uye_ekle_callback(update, context, user_id):
     bilgi = onay_bekleyenler.get(user_id, {})
     await update.callback_query.edit_message_text(
         f"Panelden ekleyin:\nAd: {bilgi.get('ad','?')}\nID: {user_id}\n\n"
-        f"ID girmek zorunda degilsiniz, dogum tarihi ile eslesir."
+        f"ID girmek zorunda degilsiniz."
     )
 
 
