@@ -48,7 +48,7 @@ def _baslik_kontrol():
 def tum_firmalar(force=False) -> dict:
     """{ firma_id: {ad, grup_id, kayitlar_sekme, calisanlar_sekme, aktif} }"""
     global _cache
-    if _cache and not force:
+    if _cache is not None and not force:
         return _cache
     try:
         s, sid = _servis()
@@ -93,6 +93,13 @@ def firma_ekle(firma_id: str, ad: str, grup_id: int) -> bool:
 
     s, sid = _servis()
 
+    # Zaten var mi? (duplicate onle)
+    r_kontrol = s.values().get(spreadsheetId=sid, range=f"{FIRMALAR_SEKME}!A2:A").execute()
+    for satir in r_kontrol.get("values", []):
+        if satir and satir[0].strip() == firma_id:
+            logger.warning(f"Firma zaten var: {firma_id}")
+            return False
+
     # Firmalar sekmesine ekle
     s.values().append(
         spreadsheetId=sid, range=f"{FIRMALAR_SEKME}!A1",
@@ -124,6 +131,8 @@ def firma_ekle(firma_id: str, ad: str, grup_id: int) -> bool:
     ])
 
     # Cache'i yenile
+    global _cache
+    _cache = None
     tum_firmalar(force=True)
     logger.info(f"Firma eklendi: {ad} ({firma_id}), grup: {grup_id}")
     return True
@@ -141,6 +150,8 @@ def firma_sil(firma_id: str):
                     spreadsheetId=sid, range=f"{FIRMALAR_SEKME}!F{satir_no}",
                     valueInputOption="RAW", body={"values": [["0"]]}
                 ).execute()
+                global _cache
+                _cache = None
                 tum_firmalar(force=True)
                 return True
         return False
