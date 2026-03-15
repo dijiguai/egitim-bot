@@ -174,7 +174,7 @@ textarea.form-input{min-height:80px;resize:vertical}
 <div class="main">
 
   <!-- FİLTRELER -->
-  <div id="filtre-bar" class="filters">
+  <div id="filtre-bar" class="filters" style="display:none">
     <div class="filter-group"><span class="filter-label">Başlangıç</span><input type="date" id="tarih-bas"></div>
     <div class="filter-group"><span class="filter-label">Bitiş</span><input type="date" id="tarih-bitis"></div>
     <div class="filter-group"><span class="filter-label">Durum</span>
@@ -579,9 +579,9 @@ function anaSeyfayaDon() {
   document.getElementById('ana-tabs').style.display = 'none';
   document.getElementById('ana-sayfa').style.display = 'block';
   document.getElementById('filtre-bar').style.display = 'none';
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.getElementById('aktif-firma-adi').style.display = 'none';
-  document.getElementById('geri-btn').style.display = 'none';
+  document.querySelectorAll('.tab-content').forEach(el => { el.classList.remove('active'); el.style.display = 'none'; });
+  if(document.getElementById('aktif-firma-adi')) document.getElementById('aktif-firma-adi').style.display = 'none';
+  if(document.getElementById('geri-btn')) document.getElementById('geri-btn').style.display = 'none';
   firmaKartlariniYukle();
   document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
   document.getElementById('geri-btn').style.display = 'none';
@@ -642,6 +642,10 @@ function firmaEkleModalAc() {
   document.getElementById('f-ad').value = '';
   document.getElementById('f-grupid').value = '';
   document.getElementById('f-hata').style.display = 'none';
+  // Baslik ve butonu sifirla (duzenle modundan geliyorsa)
+  document.querySelector('#firma-ekle-modal .modal-title').textContent = 'Yeni Firma Ekle';
+  const btn = document.querySelector('#firma-ekle-modal .btn.btn-primary');
+  btn.onclick = firmaKaydet;
   document.getElementById('firma-ekle-modal').classList.add('open');
 }
 
@@ -1978,7 +1982,7 @@ def api_firmalar_detay():
 def api_firmalar():
     if not session.get("panel_giris"): return jsonify([]), 401
     try:
-        from firma_manager import tum_firmalar
+        from firma_manager import tum_firmalar, _cache
         firmalar = tum_firmalar(force=True)
         return jsonify([
             {"firma_id": fid, "ad": f["ad"], "grup_id": f["grup_id"]}
@@ -2056,9 +2060,17 @@ def api_firma_ekle():
 
     try:
         from firma_manager import firma_ekle, tum_firmalar
-        # Zaten var mi?
-        if firma_id in tum_firmalar():
-            firma_id = firma_id + "_2"
+        mevcut = tum_firmalar(force=True)
+        # Ayni grup_id zaten var mi?
+        for fid, f in mevcut.items():
+            if str(f.get("grup_id","")) == str(grup_id):
+                return jsonify({"basarili":False,"hata":f"Bu grup ID zaten '{f['ad']}' firmasına kayıtlı"})
+        # Ayni firma_id var mi?
+        orijinal_id = firma_id
+        sayac = 2
+        while firma_id in mevcut:
+            firma_id = f"{orijinal_id}_{sayac}"
+            sayac += 1
         firma_ekle(firma_id, ad, grup_id)
         return jsonify({"basarili":True,"firma_id":firma_id})
     except Exception as e:
