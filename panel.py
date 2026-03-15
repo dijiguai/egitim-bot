@@ -489,6 +489,7 @@ async function firmaKartlariniYukle() {
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-dark btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();firmaDuzenle('${f.firma_id}','${f.ad}','${f.grup_id}')">✏️</button>
+          <button class="btn btn-red btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();firmaSil('${f.firma_id}','${f.ad}')">🗑</button>
           <button class="btn btn-primary" style="flex:1" onclick="event.stopPropagation();firmaAc('${f.firma_id}','${f.ad}')">
             Yönet →
           </button>
@@ -504,6 +505,21 @@ async function firmaKartlariniYukle() {
   } catch(e) {
     konteyner.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi: ' + e.message + '</div>';
   }
+}
+
+async function firmaSil(firma_id, ad) {
+  if(!confirm(`"${ad}" firmasını silmek istediğinizden emin misiniz?
+
+Not: Sheets'teki veriler silinmez, sadece listeden çıkarılır.`)) return;
+  try {
+    const r = await fetch('/panel/api/firma-sil', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({firma_id})
+    });
+    const d = await r.json();
+    if(d.basarili) { anaSeyfayaDon(); }
+    else { alert('Hata: ' + (d.hata||'')); }
+  } catch(e) { alert('Bağlantı hatası'); }
 }
 
 function firmaDuzenle(firma_id, ad, grup_id) {
@@ -1970,6 +1986,21 @@ def api_firmalar():
         ])
     except Exception as e:
         return jsonify([{"firma_id": "varsayilan", "ad": "Varsayılan", "grup_id": 0}])
+
+
+@app.route("/panel/api/firma-sil", methods=["POST"])
+def api_firma_sil():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    firma_id = veri.get("firma_id","").strip()
+    if firma_id == "varsayilan":
+        return jsonify({"basarili":False,"hata":"Varsayılan firma silinemez"})
+    try:
+        from firma_manager import firma_sil
+        firma_sil(firma_id)
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
 
 
 @app.route("/panel/api/firma-guncelle", methods=["POST"])
