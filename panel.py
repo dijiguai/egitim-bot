@@ -920,6 +920,26 @@ async function egitimGonderCalisan(tid, ad, btn) {
   }
 }
 
+async function kayitButonuGonder(btn) {
+  if(!confirm('Gruba kayıt butonu gönderilsin mi? Sisteme kayıtlı olmayan üyeler bu butona basarak kaydolabilir.')) return;
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/kayit-butonu-gonder', {method:'POST'});
+    const d = await r.json();
+    if(d.basarili) {
+      btn.textContent = '✅ Gönderildi';
+      btn.style.background = 'var(--green,#27ae60)';
+      setTimeout(() => { btn.textContent = '📌 Kayıt Butonu Gönder'; btn.style.background=''; btn.disabled=false; }, 4000);
+    } else {
+      alert('Hata: ' + (d.hata||''));
+      btn.textContent = '📌 Kayıt Butonu Gönder'; btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Bağlantı hatası');
+    btn.textContent = '📌 Kayıt Butonu Gönder'; btn.disabled = false;
+  }
+}
+
 async function egitimDetayGoster(tid, ad, btn) {
   const detayDiv = document.getElementById('detay-' + tid);
   if(detayDiv.style.display !== 'none') {
@@ -1534,6 +1554,35 @@ def api_bekleyen_bildir():
             ]]}
         }, timeout=10)
         return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/kayit-butonu-gonder", methods=["POST"])
+def api_kayit_butonu_gonder():
+    """Gruba kayit butonu gonder."""
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    from config import GRUP_ID, BOT_USERNAME
+    token = os.environ.get("TELEGRAM_BOT_TOKEN","")
+    base = f"https://api.telegram.org/bot{token}"
+    kayit_link = f"https://t.me/{BOT_USERNAME}?start=kayit"
+    import requests as req_lib
+    try:
+        resp = req_lib.post(f"{base}/sendMessage", json={
+            "chat_id": GRUP_ID,
+            "text": (
+                "Sisteme kayitli degilseniz asagidaki butona basin.\n\n"
+                "Dogum tarihinizi girerek 1 dakikada kaydinizi tamamlayabilirsiniz. "
+                "Kayit sonrasi gunluk egitim bildirimleri otomatik gelecektir."
+            ),
+            "reply_markup": {"inline_keyboard": [[
+                {"text": "Sisteme Kayit Ol", "url": kayit_link}
+            ]]}
+        }, timeout=10)
+        result = resp.json()
+        if result.get("ok"):
+            return jsonify({"basarili":True})
+        return jsonify({"basarili":False,"hata":result.get("description","")})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
 
