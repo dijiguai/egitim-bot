@@ -197,7 +197,7 @@ textarea.form-input{min-height:80px;resize:vertical}
     <div id="firma-kartlari" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
   </div>
 
-  <div class="tab-content" id="tab-kayitlar" style="display:none">
+  <div class="tab-content" id="tab-kayitlar">
     <div class="stats">
       <div class="stat orange"><div class="stat-label">Toplam</div><div class="stat-val orange" id="st-t">—</div><div class="stat-sub">Kayıt</div></div>
       <div class="stat green"><div class="stat-label">Geçti</div><div class="stat-val green" id="st-g">—</div><div class="stat-sub" id="st-o">—</div></div>
@@ -433,7 +433,10 @@ function bugunSec(){ document.getElementById('tarih-bas').value=bugun; document.
 function modalKapat(id){ document.getElementById(id).classList.remove('open'); }
 
 function sekme(ad, el) {
-  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>{
+    t.classList.remove('active');
+    t.style.display = '';  // inline style'i temizle
+  });
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+ad).classList.add('active');
   el.classList.add('active');
@@ -568,9 +571,18 @@ function firmaAc(firma_id, firma_adi) {
   document.getElementById('ana-sayfa').style.display = 'none';
   document.getElementById('ana-tabs').style.display = 'flex';
   document.getElementById('geri-btn').style.display = 'inline-flex';
-  // Kayitlar sekmesini ac
+  // Tab iceriklerinin style'ini temizle
+  document.querySelectorAll('.tab-content').forEach(t=>{ t.style.display=''; t.classList.remove('active'); });
+  // Kayitlar sekmesini ac ve verileri yukle
   const ilkTab = document.querySelector('.tab');
-  if(ilkTab) ilkTab.click();
+  if(ilkTab) {
+    ilkTab.classList.add('active');
+    const tabId = 'tab-kayitlar';
+    const tabEl = document.getElementById(tabId);
+    if(tabEl) { tabEl.classList.add('active'); tabEl.style.display = ''; }
+    document.getElementById('filtre-bar').style.display = 'flex';
+    verileriYukle();
+  }
 }
 
 let firmalarListesi = [];
@@ -579,7 +591,7 @@ function anaSeyfayaDon() {
   document.getElementById('ana-tabs').style.display = 'none';
   document.getElementById('ana-sayfa').style.display = 'block';
   document.getElementById('filtre-bar').style.display = 'none';
-  document.querySelectorAll('.tab-content').forEach(el => { el.classList.remove('active'); el.style.display = 'none'; });
+  document.querySelectorAll('.tab-content').forEach(el => { el.classList.remove('active'); el.style.display = ''; });
   if(document.getElementById('aktif-firma-adi')) document.getElementById('aktif-firma-adi').style.display = 'none';
   if(document.getElementById('geri-btn')) document.getElementById('geri-btn').style.display = 'none';
   firmaKartlariniYukle();
@@ -594,6 +606,8 @@ function firmaAc(firma_id, firma_ad) {
   document.getElementById('ana-sayfa').style.display = 'none';
   document.getElementById('ana-tabs').style.display = 'flex';
   document.getElementById('geri-btn').style.display = 'inline-flex';
+  // Tab iceriklerinin style'ini temizle
+  document.querySelectorAll('.tab-content').forEach(t=>{ t.style.display=''; t.classList.remove('active'); });
   document.getElementById('geri-btn').style.display = 'inline-block';
   document.getElementById('aktif-firma-adi').textContent = firma_ad;
   document.getElementById('aktif-firma-adi').style.display = 'inline';
