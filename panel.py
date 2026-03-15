@@ -592,7 +592,6 @@ function anaSeyfayaDon() {
 function firmaAc(firma_id, firma_ad) {
   aktifFirma = firma_id;
   document.getElementById('ana-sayfa').style.display = 'none';
-  document.getElementById('ana-sayfa').style.display = 'none';
   document.getElementById('ana-tabs').style.display = 'flex';
   document.getElementById('geri-btn').style.display = 'inline-flex';
   document.getElementById('geri-btn').style.display = 'inline-block';
@@ -1334,7 +1333,10 @@ async function egitimUret() {
   } catch(e){alert('Bağlantı hatası');document.getElementById('ai-form').style.display='block';document.getElementById('ai-progress').style.display='none';}
 }
 
-verileriYukle();
+// Sayfa acilinca ana sayfayi goster
+document.addEventListener("DOMContentLoaded", function() {
+  anaSeyfayaDon();
+});
 </script>
 {% endif %}
 </body>
