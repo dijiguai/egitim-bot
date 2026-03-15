@@ -173,20 +173,6 @@ textarea.form-input{min-height:80px;resize:vertical}
 
 <div class="main">
 
-  <!-- ANA SAYFA — FİRMA KARTLARI -->
-  <div id="ana-sayfa">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px">Firmalar</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:4px">Yönetmek istediğiniz firmayı seçin</div>
-      </div>
-      <button class="btn btn-primary" onclick="firmaEkleModalAc()">+ Yeni Firma</button>
-    </div>
-    <div id="firma-kartlari" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
-      <div class="loading"><div class="spinner"></div></div>
-    </div>
-  </div>
-
   <!-- FİLTRELER -->
   <div id="filtre-bar" class="filters">
     <div class="filter-group"><span class="filter-label">Başlangıç</span><input type="date" id="tarih-bas"></div>
@@ -501,9 +487,12 @@ async function firmaKartlariniYukle() {
             <div style="font-size:11px;color:var(--muted)">Toplam Kayıt</div>
           </div>
         </div>
-        <button class="btn btn-primary" style="width:100%" onclick="event.stopPropagation();firmaAc('${f.firma_id}','${f.ad}')">
-          Yönet →
-        </button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-dark btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();firmaDuzenle('${f.firma_id}','${f.ad}','${f.grup_id}')">✏️</button>
+          <button class="btn btn-primary" style="flex:1" onclick="event.stopPropagation();firmaAc('${f.firma_id}','${f.ad}')">
+            Yönet →
+          </button>
+        </div>
       </div>`).join('') + `
       <div class="egitim-kart" style="cursor:pointer;border:2px dashed var(--border);background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;transition:border-color 0.15s"
            onmouseover="this.style.borderColor='var(--accent)'" 
@@ -514,6 +503,45 @@ async function firmaKartlariniYukle() {
       </div>`;
   } catch(e) {
     konteyner.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi: ' + e.message + '</div>';
+  }
+}
+
+function firmaDuzenle(firma_id, ad, grup_id) {
+  document.getElementById('f-ad').value = ad;
+  document.getElementById('f-grupid').value = grup_id || '';
+  document.getElementById('f-hata').style.display = 'none';
+  // Modal basligini degistir
+  document.querySelector('#firma-ekle-modal .modal-title').textContent = 'Firmayı Düzenle';
+  // Kaydet butonunu guncelle
+  const btn = document.querySelector('#firma-ekle-modal .btn-primary');
+  btn.onclick = () => firmaGuncelle(firma_id);
+  document.getElementById('firma-ekle-modal').classList.add('open');
+}
+
+async function firmaGuncelle(firma_id) {
+  const ad = document.getElementById('f-ad').value.trim();
+  const grup_id = document.getElementById('f-grupid').value.trim();
+  const hataEl = document.getElementById('f-hata');
+  if(!ad) { hataEl.textContent='Firma adı zorunlu'; hataEl.style.display='block'; return; }
+
+  try {
+    const r = await fetch('/panel/api/firma-guncelle', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({firma_id, ad, grup_id})
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      modalKapat('firma-ekle-modal');
+      document.querySelector('#firma-ekle-modal .modal-title').textContent = 'Yeni Firma Ekle';
+      document.querySelector('#firma-ekle-modal .btn-primary').onclick = firmaKaydet;
+      anaSeyfayaDon();
+    } else {
+      hataEl.textContent = 'Hata: ' + (d.hata||'');
+      hataEl.style.display = 'block';
+    }
+  } catch(e) {
+    hataEl.textContent = 'Bağlantı hatası';
+    hataEl.style.display = 'block';
   }
 }
 
@@ -1942,6 +1970,35 @@ def api_firmalar():
         ])
     except Exception as e:
         return jsonify([{"firma_id": "varsayilan", "ad": "Varsayılan", "grup_id": 0}])
+
+
+@app.route("/panel/api/firma-guncelle", methods=["POST"])
+def api_firma_guncelle():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    firma_id = veri.get("firma_id","").strip()
+    ad = veri.get("ad","").strip()
+    grup_id_str = str(veri.get("grup_id","")).strip()
+    if not firma_id or not ad:
+        return jsonify({"basarili":False,"hata":"Eksik bilgi"})
+    try:
+        from firma_manager import tum_firmalar, _servis, FIRMALAR_SEKME
+        s, sid = _servis()
+        r = s.values().get(spreadsheetId=sid, range=f"{FIRMALAR_SEKME}!A2:F").execute()
+        for i, satir in enumerate(r.get("values",[])):
+            if satir and satir[0].strip() == firma_id:
+                satir_no = i + 2
+                grup_id = int(grup_id_str) if grup_id_str else (int(satir[2]) if len(satir)>2 and satir[2] else 0)
+                mevcut = list(satir) + [""]*6
+                mevcut[1] = ad
+                mevcut[2] = str(grup_id)
+                s.values().update(spreadsheetId=sid, range=f"{FIRMALAR_SEKME}!A{satir_no}",
+                    valueInputOption="RAW", body={"values":[mevcut[:6]]}).execute()
+                tum_firmalar(force=True)
+                return jsonify({"basarili":True})
+        return jsonify({"basarili":False,"hata":"Firma bulunamadi"})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
 
 
 @app.route("/panel/api/firma-ekle", methods=["POST"])
