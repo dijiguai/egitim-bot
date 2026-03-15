@@ -599,7 +599,9 @@ async function calisanListesiYukle() {
   document.getElementById('calisan-liste').innerHTML='<div class="loading"><div class="spinner"></div></div>';
   try {
     const r = await fetch('/panel/api/calisanlar');
-    const d = await r.json();
+    const resp = await r.json();
+    const d = Array.isArray(resp) ? resp : resp.calisanlar;
+    window._botUsername = Array.isArray(resp) ? 'BasTasEgitimBot' : (resp.bot_username || 'BasTasEgitimBot');
     renderCalisanlar(d);
   } catch(e) {
     document.getElementById('calisan-liste').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>';
@@ -993,7 +995,8 @@ def api_calisanlar():
             "tamamlanan": len(EGITIMLER)-len(eksik),
             "toplam_egitim": len(EGITIMLER)
         })
-    return jsonify(sonuc)
+    from config import BOT_USERNAME
+    return jsonify({"calisanlar": sonuc, "bot_username": BOT_USERNAME})
 
 @app.route("/panel/api/calisan-ekle", methods=["POST"])
 def api_calisan_ekle():
@@ -1171,13 +1174,21 @@ def api_egitim_gonder_calisan():
 
     import requests as req_lib
     try:
-        req_lib.post(f"{base}/sendMessage", json={
+        resp = req_lib.post(f"{base}/sendMessage", json={
             "chat_id": tid,
             "text": "Yoneticiniz size bugunun egitimini gonderdi.\n\n*" + egitim['baslik'] + "*\n\nBaslamak icin asagidaki butona basin:",
             "parse_mode": "Markdown",
             "reply_markup": keyboard
         }, timeout=10)
-        return jsonify({"basarili":True})
+        result = resp.json()
+        if result.get("ok"):
+            return jsonify({"basarili":True})
+        else:
+            hata = result.get("description","Telegram hatasi")
+            # Bot bu kullaniciya mesaj gonderemiyor — /start yazmamis olabilir
+            if "bot was blocked" in hata or "chat not found" in hata or "user is deactivated" in hata:
+                return jsonify({"basarili":False,"hata":f"Kullanici botu engellemis veya bota hic mesaj yazmamis. Calisanin @BasTasEgitimBot'a /start yazmasi gerekiyor."})
+            return jsonify({"basarili":False,"hata":hata})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
 
