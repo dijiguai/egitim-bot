@@ -579,11 +579,10 @@ function firmaAc(firma_id, firma_adi) {
   const ilkTab = document.querySelector('.tab');
   if(ilkTab) {
     ilkTab.classList.add('active');
-    const tabId = 'tab-kayitlar';
-    const tabEl = document.getElementById(tabId);
+    const tabEl = document.getElementById('tab-kayitlar');
     if(tabEl) { tabEl.classList.add('active'); tabEl.style.display = ''; }
     document.getElementById('filtre-bar').style.display = 'flex';
-    verileriYukle();
+    setTimeout(() => verileriYukle(), 50);
   }
 }
 
@@ -1358,6 +1357,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const kaydedilen = sessionStorage.getItem('aktifFirma');
     const kaydedilenAdi = sessionStorage.getItem('aktifFirmaAdi');
     if(kaydedilen && kaydedilenAdi) {
+      // Firma kartlarini yukledikten sonra firmayı ac
       firmaAc(kaydedilen, kaydedilenAdi);
       return;
     }
