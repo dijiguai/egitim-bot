@@ -5,6 +5,7 @@ Is Basi Egitim Botu - Ana Dosya
 import logging, os, threading
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from handlers import egitim_handler, admin_handler, kayit_handler, izin_handler
+from handlers.kayit_handler import kayit_onayla_callback, kayit_iptal_callback
 from handlers.grup_handler import (yeni_uye_handler, yeni_uye_ekle_callback,
                                     yeni_uye_yoksay_callback, grup_uyelerini_tara,
                                     grup_mesaj_dinle)
@@ -74,6 +75,8 @@ def main():
 
     # Butonlar
     app.add_handler(CallbackQueryHandler(yeni_uye_ekle_callback, pattern="^yeni_uye_ekle:"))
+    app.add_handler(CallbackQueryHandler(kayit_onayla_callback, pattern="^kayit_onayla:"))
+    app.add_handler(CallbackQueryHandler(kayit_iptal_callback, pattern="^kayit_iptal:"))
     app.add_handler(CallbackQueryHandler(yeni_uye_yoksay_callback, pattern="^yeni_uye_yoksay:"))
     app.add_handler(CallbackQueryHandler(egitim_handler.buton_handler))
 
