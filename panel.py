@@ -566,6 +566,8 @@ async function firmaGuncelle(firma_id) {
 
 function firmaAc(firma_id, firma_adi) {
   aktifFirma = firma_id;
+  // Sayfa yenilemede hatirla
+  try { sessionStorage.setItem('aktifFirma', firma_id); sessionStorage.setItem('aktifFirmaAdi', firma_adi); } catch(e){}
   document.getElementById('aktif-firma-adi').textContent = firma_adi;
   document.getElementById('aktif-firma-adi').style.display = 'inline';
   document.getElementById('ana-sayfa').style.display = 'none';
@@ -588,6 +590,8 @@ function firmaAc(firma_id, firma_adi) {
 let firmalarListesi = [];
 
 function anaSeyfayaDon() {
+  try { sessionStorage.removeItem('aktifFirma'); sessionStorage.removeItem('aktifFirmaAdi'); } catch(e){}
+  aktifFirma = null;
   document.getElementById('ana-tabs').style.display = 'none';
   document.getElementById('ana-sayfa').style.display = 'block';
   document.getElementById('filtre-bar').style.display = 'none';
@@ -1349,6 +1353,15 @@ async function egitimUret() {
 
 // Sayfa acilinca ana sayfayi goster
 document.addEventListener("DOMContentLoaded", function() {
+  // Sayfa yenilemede firmay geri yukle
+  try {
+    const kaydedilen = sessionStorage.getItem('aktifFirma');
+    const kaydedilenAdi = sessionStorage.getItem('aktifFirmaAdi');
+    if(kaydedilen && kaydedilenAdi) {
+      firmaAc(kaydedilen, kaydedilenAdi);
+      return;
+    }
+  } catch(e) {}
   anaSeyfayaDon();
 });
 </script>
