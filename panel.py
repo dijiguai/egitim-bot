@@ -338,6 +338,22 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 </div>
 
+<div class="modal-overlay" id="egitim-sec-modal">
+  <div class="modal" style="max-width:520px;width:95vw">
+    <div class="modal-title">Eğitim Seç</div>
+    <div class="modal-sub" id="egitim-sec-calisan-adi"></div>
+    <input type="hidden" id="egitim-sec-tid">
+    <div style="margin:12px 0;font-size:13px;color:var(--muted)">Tamamlanmamış eğitimler:</div>
+    <div id="egitim-sec-liste" style="max-height:350px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+    <div id="egitim-sec-bos" style="display:none;text-align:center;padding:20px;color:var(--muted)">
+      🎉 Bu çalışan tüm eğitimleri tamamlamış!
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn btn-dark" style="width:100%" onclick="modalKapat('egitim-sec-modal')">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="sil-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-title">Çalışanı Sil</div>
@@ -626,7 +642,7 @@ function renderCalisanlar(calisanlar) {
           ${c.telegram_id > 0 ? `<div class="calisan-id">ID: ${c.telegram_id}</div>` : '<div class="calisan-id" style="color:#e67e22">⚠ Telegram bağlı değil</div>'}
         </div>
         <div class="calisan-aksiyonlar">
-          <button class="btn btn-primary btn-sm" onclick="egitimGonderCalisan(${c.telegram_id},'${c.ad_soyad}',this)" ${c.telegram_id<=0?'disabled':''} title="Bugünkü eğitimi gönder">📤 Eğitim Gönder</button>
+          <button class="btn btn-primary btn-sm" onclick="egitimSecModalAc(${c.telegram_id},'${c.ad_soyad}',this)" ${c.telegram_id<=0?'disabled':''} title="Eğitim seç ve gönder">📤 Eğitim Gönder</button>
           <button class="btn btn-orange btn-sm" onclick="ekstraHakVer(${c.telegram_id},'${c.ad_soyad}',this)" ${c.telegram_id<=0?'disabled':''} title="Bugün tekrar girebilsin">🔁 Tekrar İzni</button>
           <button class="btn btn-green btn-sm" onclick="izinModalAc(${c.telegram_id},'${c.ad_soyad}')">🏖 İzin</button>
           <button class="btn btn-dark btn-sm" onclick="calisanDuzenle(${c.telegram_id},'${c.ad_soyad}','${c.gorev}','${c.dogum_tarihi}')">✏️</button>
@@ -636,9 +652,13 @@ function renderCalisanlar(calisanlar) {
       <div class="calisan-ilerleme">
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
           <span>Eğitim İlerlemesi</span>
-          <span>${c.tamamlanan}/${c.toplam_egitim} tamamlandı</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span>${c.tamamlanan}/${c.toplam_egitim} tamamlandı</span>
+            <button class="btn btn-dark" style="font-size:11px;padding:2px 8px;border-radius:6px" onclick="egitimDetayGoster(${c.telegram_id},'${c.ad_soyad}',this)">Detay</button>
+          </div>
         </div>
         <div class="ilerleme-bar"><div class="ilerleme-dolu" style="width:${c.toplam_egitim?Math.round(c.tamamlanan/c.toplam_egitim*100):0}%"></div></div>
+        <div id="detay-${c.telegram_id}" style="display:none;margin-top:10px"></div>
       </div>
     </div>`).join('');
 }
@@ -817,6 +837,61 @@ async function egitimDuzenleKaydet() {
 
 // ── CALISAN AKSIYONLARI ──────────────────
 
+async function egitimSecModalAc(tid, ad, btn) {
+  if(!tid || tid <= 0) { alert('Telegram hesabı bağlı değil. Çalışanın bota /start yazması gerekiyor.'); return; }
+  document.getElementById('egitim-sec-tid').value = tid;
+  document.getElementById('egitim-sec-calisan-adi').textContent = ad;
+  document.getElementById('egitim-sec-liste').innerHTML = '<div class="loading"><div class="spinner"></div>Yükleniyor...</div>';
+  document.getElementById('egitim-sec-bos').style.display = 'none';
+  document.getElementById('egitim-sec-modal').classList.add('open');
+
+  try {
+    const r = await fetch(`/panel/api/calisan-egitim-durumu?tid=${tid}`);
+    const d = await r.json();
+
+    if(!d.tamamlanmamis || d.tamamlanmamis.length === 0) {
+      document.getElementById('egitim-sec-liste').innerHTML = '';
+      document.getElementById('egitim-sec-bos').style.display = 'block';
+      return;
+    }
+
+    document.getElementById('egitim-sec-liste').innerHTML = d.tamamlanmamis.map(e => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+        <div>
+          <div style="font-weight:600;font-size:14px">${e.baslik}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${e.tur} · ${e.sure}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="egitimGonderSecili('${e.id}',${tid},'${ad.replace(/'/g,"\'")}',this)">Gönder</button>
+      </div>`).join('');
+
+  } catch(e) {
+    document.getElementById('egitim-sec-liste').innerHTML = '<div style="color:red">Yüklenemedi: ' + e.message + '</div>';
+  }
+}
+
+async function egitimGonderSecili(egitimId, tid, ad, btn) {
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/egitim-gonder-calisan', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({telegram_id: tid, egitim_id: egitimId})
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      btn.textContent = '✅ Gönderildi';
+      btn.style.background = 'var(--green,#27ae60)';
+      btn.disabled = true;
+    } else {
+      alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+      btn.textContent = 'Gönder'; btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Bağlantı hatası');
+    btn.textContent = 'Gönder'; btn.disabled = false;
+  }
+}
+
 async function egitimGonderCalisan(tid, ad, btn) {
   if(!tid || tid <= 0) { alert('Bu çalışanın Telegram hesabı bağlı değil.'); return; }
   if(!confirm(`${ad} kişisine bugünkü eğitimi göndermek istediğinizden emin misiniz?`)) return;
@@ -842,6 +917,37 @@ async function egitimGonderCalisan(tid, ad, btn) {
     alert('Bağlantı hatası');
     btn.textContent = '📤 Eğitim Gönder';
     btn.disabled = false;
+  }
+}
+
+async function egitimDetayGoster(tid, ad, btn) {
+  const detayDiv = document.getElementById('detay-' + tid);
+  if(detayDiv.style.display !== 'none') {
+    detayDiv.style.display = 'none';
+    btn.textContent = 'Detay';
+    return;
+  }
+  btn.textContent = '⏳';
+  try {
+    const r = await fetch(`/panel/api/calisan-egitim-durumu?tid=${tid}`);
+    const d = await r.json();
+    const t = d.tamamlanan || [];
+    const e = d.tamamlanmamis || [];
+    detayDiv.innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">
+        ${t.length ? `<div style="flex:1;min-width:200px">
+          <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:6px">✅ TAMAMLANDI (${t.length})</div>
+          ${t.map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)">${x.baslik}</div>`).join('')}
+        </div>` : ''}
+        ${e.length ? `<div style="flex:1;min-width:200px">
+          <div style="font-size:11px;font-weight:700;color:var(--red,#e74c3c);margin-bottom:6px">⏳ TAMAMLANMADI (${e.length})</div>
+          ${e.map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)">${x.baslik}</div>`).join('')}
+        </div>` : ''}
+      </div>`;
+    detayDiv.style.display = 'block';
+    btn.textContent = 'Gizle';
+  } catch(err) {
+    btn.textContent = 'Detay';
   }
 }
 
@@ -1147,6 +1253,39 @@ def api_egitim_gonder():
         return jsonify({"basarili":False,"hata":str(e)})
 
 
+@app.route("/panel/api/calisan-egitim-durumu")
+def api_calisan_egitim_durumu():
+    """Calisanin tamamladigi ve tamamlamadigi egitimleri dondur."""
+    if not session.get("panel_giris"): return jsonify({}), 401
+    tid = request.args.get("tid", 0, type=int)
+    if not tid: return jsonify({"hata": "Gecersiz ID"})
+
+    from durum import eksik_egitimler
+    eksik = eksik_egitimler(tid)
+    tamamlanan_ids = [e for e in EGITIMLER.keys() if e not in eksik]
+
+    tamamlanmamis = []
+    tamamlanan = []
+
+    for eid, e in EGITIMLER.items():
+        bilgi = {
+            "id": eid,
+            "baslik": e.get("baslik",""),
+            "tur": e.get("tur",""),
+            "sure": e.get("sure","")
+        }
+        if eid in eksik:
+            tamamlanmamis.append(bilgi)
+        else:
+            tamamlanan.append(bilgi)
+
+    return jsonify({
+        "tamamlanmamis": tamamlanmamis,
+        "tamamlanan": tamamlanan,
+        "ozet": f"{len(tamamlanan)}/{len(EGITIMLER)} tamamlandi"
+    })
+
+
 @app.route("/panel/api/egitim-gonder-calisan", methods=["POST"])
 def api_egitim_gonder_calisan():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
@@ -1155,9 +1294,9 @@ def api_egitim_gonder_calisan():
     tid = int(veri.get("telegram_id",0))
     if not tid: return jsonify({"basarili":False,"hata":"Gecersiz ID"})
 
-    egitim_id = gunun_egitim_id()
+    # Belirli bir egitim secildiyse onu kullan, yoksa gunun egitimini al
+    egitim_id = veri.get("egitim_id", "").strip() or gunun_egitim_id()
     if not egitim_id:
-        # Siradaki egitimi al
         from durum import siradaki_egitim_al
         egitim_id, _ = siradaki_egitim_al()
 
