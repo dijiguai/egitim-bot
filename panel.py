@@ -1222,7 +1222,7 @@ SADECE JSON döndür:
 {{"id":"ingilizce_kisa_anahtar","baslik":"Emoji + Türkçe başlık","tur":"İş Güvenliği","sure":"~XX dakika","metin":"Telegram Markdown eğitim metni, *kalın* kullan, 5 bölüm olsun","sorular":[{{"soru":"?","secenekler":["A","B","C","D"],"dogru":0}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":1}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":2}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":0}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":3}}]}}"""
     try:
         import urllib.request
-        payload=json.dumps({"model":"claude-sonnet-4-6","max_tokens":2000,"messages":[{"role":"user","content":prompt}]}).encode()
+        payload=json.dumps({"model":"claude-sonnet-4-5","max_tokens":2000,"messages":[{"role":"user","content":prompt}]}).encode()
         req=urllib.request.Request("https://api.anthropic.com/v1/messages",data=payload,
             headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"},method="POST")
         with urllib.request.urlopen(req,timeout=60) as resp:
