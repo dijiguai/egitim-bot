@@ -640,10 +640,12 @@ function renderCalisanlar(calisanlar) {
         </div>
       </div>
       <div class="calisan-ilerleme">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:6px">
           <span>Eğitim İlerlemesi</span>
-          <div style="display:flex;gap:8px;align-items:center">
-            <span>${c.tamamlanan}/${c.toplam_egitim} tamamlandı</span>
+          <div style="display:flex;gap:12px;align-items:center">
+            <span title="Geçilen eğitim sayısı">✅ ${c.tamamlanan}/${c.toplam_egitim} geçti</span>
+            <span title="Toplam katıldığı eğitim sayısı (geçti+kaldı)">📋 ${c.toplam_alinmis} katılım</span>
+            ${c.son_egitim ? `<span title="Son eğitim tarihi">🗓 ${c.son_egitim}</span>` : ''}
             <button class="btn btn-dark" style="font-size:11px;padding:2px 8px;border-radius:6px" onclick="egitimDetayGoster(${c.telegram_id},'${c.ad_soyad}',this)">Detay</button>
           </div>
         </div>
@@ -1141,6 +1143,12 @@ def api_calisanlar():
     for tid, c in calisanlar.items():
         gecilen = gecilen_egitimler_hesapla(tid)
         tamamlanan = len(gecilen)
+        # Toplam kac egitim almis (gecti/kaldi farketmez)
+        toplam_alinmis = sum(1 for k in tum_kayitlar if str(k.get("telegram_id","")) == str(tid))
+        # Son egitim tarihi
+        calisan_kayitlar = [k for k in tum_kayitlar if str(k.get("telegram_id","")) == str(tid)]
+        son_egitim = calisan_kayitlar[-1].get("tarih","") if calisan_kayitlar else ""
+
         sonuc.append({
             "telegram_id": tid,
             "ad_soyad": c["ad_soyad"],
@@ -1149,7 +1157,9 @@ def api_calisanlar():
             "bugun_izinli": izinli_mi(tid, bugun),
             "bugun_tamamladi": str(tid) in bugun_tamamlayan_listesi,
             "tamamlanan": tamamlanan,
-            "toplam_egitim": toplam_egitim
+            "toplam_egitim": toplam_egitim,
+            "toplam_alinmis": toplam_alinmis,
+            "son_egitim": son_egitim
         })
 
     return jsonify({"calisanlar": sonuc, "bot_username": BOT_USERNAME})
