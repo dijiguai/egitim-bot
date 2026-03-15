@@ -951,21 +951,38 @@ async function egitimDetayGoster(tid, ad, btn) {
     return;
   }
   btn.textContent = '⏳';
+  // tid ve ad'i detay div'e kaydet (Tekrar Gonder icin)
+  detayDiv.dataset.tid = tid;
+  detayDiv.dataset.ad = ad;
   try {
     const r = await fetch(`/panel/api/calisan-egitim-durumu?tid=${tid}`);
     const d = await r.json();
     const t = d.tamamlanan || [];
     const e = d.tamamlanmamis || [];
     detayDiv.innerHTML = `
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">
-        ${t.length ? `<div style="flex:1;min-width:200px">
-          <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:6px">✅ TAMAMLANDI (${t.length})</div>
-          ${t.map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)">${x.baslik}</div>`).join('')}
-        </div>` : ''}
-        ${e.length ? `<div style="flex:1;min-width:200px">
-          <div style="font-size:11px;font-weight:700;color:var(--red,#e74c3c);margin-bottom:6px">⏳ TAMAMLANMADI (${e.length})</div>
-          ${e.map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)">${x.baslik}</div>`).join('')}
-        </div>` : ''}
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+        ${t.length ? `
+          <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:2px">✅ TAMAMLANDI (${t.length})</div>
+          ${t.map(x=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f0faf2;border:1px solid #c3e6cb;border-radius:8px">
+              <div>
+                <div style="font-size:12px;font-weight:600">${x.baslik}</div>
+                ${x.kac_kez > 0 ? `<div style="font-size:11px;color:var(--muted)">${x.kac_kez} deneme · Son: ${x.son_tarih} · ${x.son_puan} puan</div>` : ''}
+              </div>
+              <button class="btn btn-dark" style="font-size:11px;padding:3px 8px" onclick="egitimGonderSecili('${x.id}',${tid},'${ad}',this)">↩ Tekrar</button>
+            </div>`).join('')}
+        ` : ''}
+        ${e.length ? `
+          <div style="font-size:11px;font-weight:700;color:var(--red,#e74c3c);margin-top:4px;margin-bottom:2px">⏳ TAMAMLANMADI (${e.length})</div>
+          ${e.map(x=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#fff8f0;border:1px solid #fcd;border-radius:8px">
+              <div>
+                <div style="font-size:12px;font-weight:600">${x.baslik}</div>
+                ${x.kac_kez > 0 ? `<div style="font-size:11px;color:var(--muted)">${x.kac_kez} deneme · Son: ${x.son_tarih} · ${x.son_puan} puan</div>` : '<div style="font-size:11px;color:var(--muted)">Henüz almadı</div>'}
+              </div>
+              <button class="btn btn-primary" style="font-size:11px;padding:3px 8px" onclick="egitimGonderSecili('${x.id}',${tid},'${ad}',this)">Gönder</button>
+            </div>`).join('')}
+        ` : ''}
       </div>`;
     detayDiv.style.display = 'block';
     btn.textContent = 'Gizle';
@@ -1278,25 +1295,57 @@ def api_egitim_gonder():
 
 @app.route("/panel/api/calisan-egitim-durumu")
 def api_calisan_egitim_durumu():
-    """Calisanin tamamladigi ve tamamlamadigi egitimleri dondur."""
+    """Calisanin egitim gecmisini dondur — her egitim icin kac kez aldigi, puani, gecip gecmedigi."""
     if not session.get("panel_giris"): return jsonify({}), 401
     tid = request.args.get("tid", 0, type=int)
     if not tid: return jsonify({"hata": "Gecersiz ID"})
 
     from durum import eksik_egitimler
+    from sheets import tum_kayitlar_getir
+
     eksik = eksik_egitimler(tid)
-    tamamlanan_ids = [e for e in EGITIMLER.keys() if e not in eksik]
+
+    # Bu calisanin tum kayitlarini getir
+    try:
+        tum = tum_kayitlar_getir()
+        calisan_kayitlar = [k for k in tum if str(k.get("telegram_id","")) == str(tid)]
+    except:
+        calisan_kayitlar = []
+
+    # Her egitim icin istatistik hesapla
+    egitim_istatistik = {}
+    for k in calisan_kayitlar:
+        konu = k.get("egitim_konusu","")
+        if konu not in egitim_istatistik:
+            egitim_istatistik[konu] = []
+        egitim_istatistik[konu].append({
+            "tarih": k.get("tarih",""),
+            "saat": k.get("saat",""),
+            "puan": k.get("puan",""),
+            "durum": k.get("durum","")
+        })
 
     tamamlanmamis = []
     tamamlanan = []
 
     for eid, e in EGITIMLER.items():
+        baslik = e.get("baslik","")
+        kayitlar = egitim_istatistik.get(baslik, [])
+        son_kayit = kayitlar[-1] if kayitlar else None
+        gecti_mi = any(k.get("durum") in ("GECTI","GECTİ") for k in kayitlar)
+
         bilgi = {
             "id": eid,
-            "baslik": e.get("baslik",""),
+            "baslik": baslik,
             "tur": e.get("tur",""),
-            "sure": e.get("sure","")
+            "sure": e.get("sure",""),
+            "kac_kez": len(kayitlar),
+            "son_puan": son_kayit["puan"] if son_kayit else "-",
+            "son_tarih": son_kayit["tarih"] if son_kayit else "-",
+            "son_durum": son_kayit["durum"] if son_kayit else "-",
+            "gecti": gecti_mi
         }
+
         if eid in eksik:
             tamamlanmamis.append(bilgi)
         else:
