@@ -215,7 +215,10 @@ textarea.form-input{min-height:80px;resize:vertical}
   <div class="tab-content" id="tab-calisanlar">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div class="section-title" style="margin:0">Çalışan Listesi</div>
-      <button class="btn btn-primary" onclick="calisanModalAc()">+ Çalışan Ekle</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-dark btn-sm" onclick="kayitButonuGonder(this)">📌 Kayıt Butonu Gönder</button>
+        <button class="btn btn-primary" onclick="calisanModalAc()">+ Çalışan Ekle</button>
+      </div>
     </div>
     <div id="calisan-liste"><div class="loading"><div class="spinner"></div></div></div>
   </div>
