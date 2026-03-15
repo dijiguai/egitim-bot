@@ -1,21 +1,19 @@
 """
-Google Sheets entegrasyonu
+Egitim kayitlari - firma bazli Google Sheets okuma/yazma
 """
 
-import logging
-import os
+import logging, os
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
-
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SHEET_NAME = "Sayfa1"
 
 SUTUNLAR = [
     "tarih", "saat", "ad_soyad", "telegram_id",
     "gorev", "egitim_konusu", "egitim_turu",
-    "puan", "durum", "kimlik_dogrulandi", "dogum_yili"
+    "puan", "durum", "kimlik_dogrulandi", "dogum_yili", "deneme_no"
 ]
 
 
@@ -27,40 +25,38 @@ def _servis():
     return service, spreadsheet_id
 
 
-def kayit_ekle(kayit: dict):
-    """Yeni kayıt ekle — kayit_handler tarafından çağrılır."""
-    satir = [str(kayit.get(s, "")) for s in SUTUNLAR]
+def _kayitlar_sekme(firma_id: str = None) -> str:
+    """Firma ID'sine gore kayitlar sekme adini dondur."""
+    if not firma_id or firma_id == "varsayilan":
+        return "Sayfa1"
+    try:
+        from firma_manager import tum_firmalar
+        f = tum_firmalar().get(firma_id, {})
+        return f.get("kayitlar_sekme", f"Kayitlar_{firma_id}")
+    except:
+        return "Sayfa1"
+
+
+def kayit_ekle(kayit: dict, firma_id: str = None):
+    sekme = _kayitlar_sekme(firma_id)
     servis, spreadsheet_id = _servis()
+    satir = [str(kayit.get(s, "")) for s in SUTUNLAR]
     servis.values().append(
         spreadsheetId=spreadsheet_id,
-        range=f"{SHEET_NAME}!A1",
+        range=f"{sekme}!A1",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
         body={"values": [satir]}
     ).execute()
-    logger.info(f"Sheets'e yazıldı: {kayit.get('ad_soyad')} — {kayit.get('durum')}")
 
 
-# Geriye dönük uyumluluk
-sonuc_kaydet = kayit_ekle
-
-
-def kayitlari_getir(bas: str = "", bitis: str = "") -> list:
-    """Tarih aralığına göre kayıt getir."""
-    return [
-        k for k in tum_kayitlar_getir()
-        if (not bas or k.get("tarih", "") >= bas) and
-           (not bitis or k.get("tarih", "") <= bitis)
-    ]
-
-
-def tum_kayitlar_getir() -> list:
-    """Panel için tüm kayıtları getirir."""
+def tum_kayitlar_getir(firma_id: str = None) -> list:
+    sekme = _kayitlar_sekme(firma_id)
     try:
         servis, spreadsheet_id = _servis()
         result = servis.values().get(
             spreadsheetId=spreadsheet_id,
-            range=f"{SHEET_NAME}!A2:K"
+            range=f"{sekme}!A2:L"
         ).execute()
         satirlar = result.get("values", [])
         kayitlar = []
@@ -70,5 +66,13 @@ def tum_kayitlar_getir() -> list:
             kayitlar.append(dict(zip(SUTUNLAR, satir)))
         return kayitlar
     except Exception as e:
-        logger.error(f"Sheets okuma hatası: {e}")
+        logger.error(f"Sheets okuma hatasi ({sekme}): {e}")
         return []
+
+
+def kayitlari_getir(bas: str = "", bitis: str = "", firma_id: str = None) -> list:
+    return [
+        k for k in tum_kayitlar_getir(firma_id)
+        if (not bas or k.get("tarih", "") >= bas) and
+           (not bitis or k.get("tarih", "") <= bitis)
+    ]
