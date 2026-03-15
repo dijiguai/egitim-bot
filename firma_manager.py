@@ -24,8 +24,19 @@ def _servis():
 
 
 def _baslik_kontrol():
+    """Firmalar sekmesi yoksa olustur, baslik yoksa ekle."""
     try:
         s, sid = _servis()
+        # Once sekmenin var olup olmadigini kontrol et
+        mevcut = _mevcut_sekmeler()
+        if FIRMALAR_SEKME not in mevcut:
+            # Sekmeyi olustur
+            s.batchUpdate(spreadsheetId=sid, body={
+                "requests": [{"addSheet": {"properties": {"title": FIRMALAR_SEKME}}}]
+            }).execute()
+            logger.info(f"'{FIRMALAR_SEKME}' sekmesi olusturuldu")
+
+        # Baslik satiri ekle
         r = s.values().get(spreadsheetId=sid, range=f"{FIRMALAR_SEKME}!A1:F1").execute()
         if not r.get("values"):
             s.values().update(spreadsheetId=sid, range=f"{FIRMALAR_SEKME}!A1",
