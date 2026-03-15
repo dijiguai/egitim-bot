@@ -154,27 +154,38 @@ textarea.form-input{min-height:80px;resize:vertical}
 
 {% else %}
 <div class="header">
-  <div style="display:flex;align-items:center;gap:16px">
-    <div class="header-logo"><div class="logo-dot"></div>Eğitim Paneli</div>
-    <select id="firma-secici" onchange="firmaSecildi(this.value)" style="padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:13px;cursor:pointer;max-width:200px">
-      <option value="">⏳ Yükleniyor...</option>
-    </select>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="header-logo" style="cursor:pointer" onclick="anaSeyfayaDon()"><div class="logo-dot"></div>Eğitim Paneli</div>
+    <span id="aktif-firma-adi" style="font-size:13px;color:var(--muted);display:none"></span>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
-    <button class="logout-btn" onclick="firmaEkleModalAc()" style="background:var(--primary);color:#fff">+ Firma</button>
+    <button id="geri-btn" class="btn btn-dark btn-sm" onclick="anaSeyfayaDon()" style="display:none">← Firmalar</button>
     <a href="/panel/cikis"><button class="logout-btn">Çıkış</button></a>
   </div>
 </div>
-<div class="tabs">
+<div class="tabs" id="ana-tabs" style="display:none">
   <div class="tab active" onclick="sekme('kayitlar',this)">📊 Kayıtlar</div>
   <div class="tab" onclick="sekme('calisanlar',this)">👥 Çalışanlar</div>
-
   <div class="tab" onclick="sekme('istatistik',this)">📈 İstatistik</div>
   <div class="tab" onclick="sekme('mesajlar',this)">💬 Grup Mesajları</div>
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
 </div>
 
 <div class="main">
+
+  <!-- ANA SAYFA — FİRMA KARTLARI -->
+  <div id="ana-sayfa">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px">Firmalar</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px">Yönetmek istediğiniz firmayı seçin</div>
+      </div>
+      <button class="btn btn-primary" onclick="firmaEkleModalAc()">+ Yeni Firma</button>
+    </div>
+    <div id="firma-kartlari" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
 
   <!-- FİLTRELER -->
   <div id="filtre-bar" class="filters">
@@ -188,7 +199,19 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 
   <!-- KAYITLAR -->
-  <div class="tab-content active" id="tab-kayitlar">
+  <!-- ANA SAYFA — Firma Kartları -->
+  <div id="ana-sayfa" style="padding:32px 24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700">Firmalar</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px">Yönetmek istediğiniz firmayı seçin</div>
+      </div>
+      <button class="btn btn-primary" onclick="firmaEkleModalAc()">+ Yeni Firma Ekle</button>
+    </div>
+    <div id="firma-kartlari" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
+  </div>
+
+  <div class="tab-content" id="tab-kayitlar" style="display:none">
     <div class="stats">
       <div class="stat orange"><div class="stat-label">Toplam</div><div class="stat-val orange" id="st-t">—</div><div class="stat-sub">Kayıt</div></div>
       <div class="stat green"><div class="stat-label">Geçti</div><div class="stat-val green" id="st-g">—</div><div class="stat-sub" id="st-o">—</div></div>
@@ -438,28 +461,137 @@ function sekme(ad, el) {
 // Aktif firma
 let aktifFirma = "varsayilan";
 
-function firmaSecildi(firma_id) {
-  aktifFirma = firma_id || "varsayilan";
-  // Mevcut sekmeyi yenile
-  const aktifTab = document.querySelector('.tab.active');
-  if(aktifTab) aktifTab.click();
+async function firmaKartlariniYukle() {
+  const konteyner = document.getElementById('firma-kartlari');
+  konteyner.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch('/panel/api/firmalar-detay');
+    const firmalar = await r.json();
+    if(!firmalar.length) {
+      konteyner.innerHTML = `<div class="egitim-kart" style="text-align:center;padding:40px;cursor:pointer" onclick="firmaEkleModalAc()">
+        <div style="font-size:40px;margin-bottom:12px">➕</div>
+        <div style="font-weight:700">İlk Firmayı Ekle</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:6px">Başlamak için bir firma ekleyin</div>
+      </div>`;
+      return;
+    }
+    konteyner.innerHTML = firmalar.map(f => `
+      <div class="egitim-kart" style="cursor:pointer;transition:transform 0.15s" 
+           onmouseover="this.style.transform='translateY(-2px)'" 
+           onmouseout="this.style.transform=''"
+           onclick="firmaAc('${f.firma_id}','${f.ad}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px">${f.ad}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">Grup ID: ${f.grup_id || '—'}</div>
+          </div>
+          <div style="width:44px;height:44px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">🏭</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
+          <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif">${f.calisan_sayisi}</div>
+            <div style="font-size:11px;color:var(--muted)">Çalışan</div>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:var(--green)">${f.bugun_tamamlayan}</div>
+            <div style="font-size:11px;color:var(--muted)">Bugün Geçti</div>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:var(--accent)">${f.toplam_kayit}</div>
+            <div style="font-size:11px;color:var(--muted)">Toplam Kayıt</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="event.stopPropagation();firmaAc('${f.firma_id}','${f.ad}')">
+          Yönet →
+        </button>
+      </div>`).join('') + `
+      <div class="egitim-kart" style="cursor:pointer;border:2px dashed var(--border);background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;transition:border-color 0.15s"
+           onmouseover="this.style.borderColor='var(--accent)'" 
+           onmouseout="this.style.borderColor='var(--border)'"
+           onclick="firmaEkleModalAc()">
+        <div style="font-size:32px;margin-bottom:8px">➕</div>
+        <div style="font-weight:600;color:var(--muted)">Yeni Firma Ekle</div>
+      </div>`;
+  } catch(e) {
+    konteyner.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi: ' + e.message + '</div>';
+  }
+}
+
+function firmaAc(firma_id, firma_adi) {
+  aktifFirma = firma_id;
+  document.getElementById('aktif-firma-adi').textContent = firma_adi;
+  document.getElementById('aktif-firma-adi').style.display = 'inline';
+  document.getElementById('ana-sayfa').style.display = 'none';
+  document.getElementById('ana-tabs').style.display = 'flex';
+  document.getElementById('geri-btn').style.display = 'inline-flex';
+  // Kayitlar sekmesini ac
+  const ilkTab = document.querySelector('.tab');
+  if(ilkTab) ilkTab.click();
+}
+
+let firmalarListesi = [];
+
+function anaSeyfayaDon() {
+  document.getElementById('ana-tabs').style.display = 'none';
+  document.getElementById('ana-sayfa').style.display = 'block';
+  document.getElementById('filtre-bar').style.display = 'none';
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.getElementById('aktif-firma-adi').style.display = 'none';
+  document.getElementById('geri-btn').style.display = 'none';
+  firmaKartlariniYukle();
+  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+  document.getElementById('geri-btn').style.display = 'none';
+  document.getElementById('aktif-firma-adi').style.display = 'none';
+  firmalariYukle();
+}
+
+function firmaAc(firma_id, firma_ad) {
+  aktifFirma = firma_id;
+  document.getElementById('ana-sayfa').style.display = 'none';
+  document.getElementById('ana-sayfa').style.display = 'none';
+  document.getElementById('ana-tabs').style.display = 'flex';
+  document.getElementById('geri-btn').style.display = 'inline-flex';
+  document.getElementById('geri-btn').style.display = 'inline-block';
+  document.getElementById('aktif-firma-adi').textContent = firma_ad;
+  document.getElementById('aktif-firma-adi').style.display = 'inline';
+  // Kayitlar sekmesini ac
+  sekme('kayitlar', document.querySelector('.tab'));
+  document.querySelectorAll('.tab')[0].click();
 }
 
 async function firmalariYukle() {
   try {
     const r = await fetch('/panel/api/firmalar');
-    const d = await r.json();
-    const sec = document.getElementById('firma-secici');
-    sec.innerHTML = d.map(f =>
-      `<option value="${f.firma_id}">${f.ad}</option>`
-    ).join('');
-    if(d.length > 0) {
-      aktifFirma = d[0].firma_id;
-      sec.value = aktifFirma;
-    }
+    firmalarListesi = await r.json();
+    renderFirmaKartlari(firmalarListesi);
   } catch(e) {
-    console.error('Firmalar yuklenemedi:', e);
+    document.getElementById('firma-kartlari').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Firmalar yüklenemedi</div>';
   }
+}
+
+function renderFirmaKartlari(firmalar) {
+  const container = document.getElementById('firma-kartlari');
+  if(!firmalar.length) {
+    container.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
+        <div style="font-size:48px;margin-bottom:16px">🏢</div>
+        <div style="font-size:16px;margin-bottom:8px">Henüz firma eklenmedi</div>
+        <button class="btn btn-primary" onclick="firmaEkleModalAc()">+ İlk Firmayı Ekle</button>
+      </div>`;
+    return;
+  }
+  container.innerHTML = firmalar.map(f => `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;cursor:pointer;transition:box-shadow .2s" 
+         onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)'"
+         onmouseout="this.style.boxShadow='none'"
+         onclick="firmaAc('${f.firma_id}','${f.ad}')">
+      <div style="font-size:32px;margin-bottom:12px">🏢</div>
+      <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:4px">${f.ad}</div>
+      <div style="font-size:12px;color:var(--muted)">Grup ID: ${f.grup_id || '—'}</div>
+      <div style="margin-top:16px">
+        <span style="background:var(--primary);color:#fff;padding:6px 14px;border-radius:8px;font-size:13px">Yönet →</span>
+      </div>
+    </div>`).join('');
 }
 
 function firmaEkleModalAc() {
@@ -473,27 +605,21 @@ async function firmaKaydet() {
   const ad = document.getElementById('f-ad').value.trim();
   const grupid = document.getElementById('f-grupid').value.trim();
   const hataEl = document.getElementById('f-hata');
-
   if(!ad || !grupid) {
     hataEl.textContent = 'Tüm alanları doldurun.';
     hataEl.style.display = 'block';
     return;
   }
-
   try {
     const r = await fetch('/panel/api/firma-ekle', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ad, grup_id: grupid})
     });
     const d = await r.json();
     if(d.basarili) {
       modalKapat('firma-ekle-modal');
       await firmalariYukle();
-      // Yeni firmaya gec
-      document.getElementById('firma-secici').value = d.firma_id;
-      firmaSecildi(d.firma_id);
-      alert(`"${ad}" firması başarıyla eklendi! Sheets'te gerekli sekmeler otomatik oluşturuldu.`);
+      alert(`"${ad}" firması eklendi! Sheets'te sekmeler otomatik oluşturuldu.`);
     } else {
       hataEl.textContent = 'Hata: ' + (d.hata || 'Bilinmeyen');
       hataEl.style.display = 'block';
@@ -1768,6 +1894,40 @@ def api_kayit_butonu_gonder():
         return jsonify({"basarili":False,"hata":result.get("description","")})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/firmalar-detay")
+def api_firmalar_detay():
+    """Firma kartlari icin istatistikli liste."""
+    if not session.get("panel_giris"): return jsonify([]), 401
+    try:
+        from firma_manager import tum_firmalar
+        from durum import bugun_tamamlayanlar
+        firmalar = tum_firmalar(force=True)
+        bugun = date.today().strftime("%d.%m.%Y")
+        bugun_tamamlayan_listesi = bugun_tamamlayanlar(bugun)
+        sonuc = []
+        for fid, f in firmalar.items():
+            try:
+                calisanlar = tum_calisanlar(fid)
+                kayitlar = tum_kayitlar_getir(fid)
+                bugun_gecti = sum(1 for k in kayitlar
+                    if k.get("tarih") == bugun and k.get("durum") in ("GECTI","GECTİ"))
+            except:
+                calisanlar = {}
+                kayitlar = []
+                bugun_gecti = 0
+            sonuc.append({
+                "firma_id": fid,
+                "ad": f["ad"],
+                "grup_id": f.get("grup_id", 0),
+                "calisan_sayisi": len(calisanlar),
+                "bugun_tamamlayan": bugun_gecti,
+                "toplam_kayit": len(kayitlar)
+            })
+        return jsonify(sonuc)
+    except Exception as e:
+        return jsonify([])
 
 
 @app.route("/panel/api/firmalar")
