@@ -166,6 +166,7 @@ def bugun_tamamlayanlar(tarih: str) -> list:
 
 
 def tamamlandi_kaydet(user_id: int, egitim_id: str):
+    """Tamamlanan egitimi hem durum.json'a hem bugun listesine kaydet."""
     d = _oku()
     k = str(user_id)
     d.setdefault("tamamlananlar", {}).setdefault(k, [])
@@ -177,9 +178,40 @@ def tamamlandi_kaydet(user_id: int, egitim_id: str):
 
 def eksik_egitimler(user_id: int) -> list:
     from config import EGITIMLER
-    d = _oku()
-    tamamlananlar = d.get("tamamlananlar", {}).get(str(user_id), [])
+    tamamlananlar = tamamlanan_egitimler(user_id)
     return [e for e in EGITIMLER.keys() if e not in tamamlananlar]
+
+
+def tamamlanan_egitimler(user_id: int) -> list:
+    """
+    Sheets kayitlarindan gecilen egitimleri hesapla.
+    durum.json'daki listeyle birlestir (her ikisine de bak).
+    """
+    from config import EGITIMLER
+    gecilen = set()
+
+    # 1. Sheets'ten oku — GECTI olan kayitlara bak
+    try:
+        from sheets import tum_kayitlar_getir
+        kayitlar = tum_kayitlar_getir()
+        for k in kayitlar:
+            if str(k.get("telegram_id","")) == str(user_id):
+                if k.get("durum","") in ("GECTI","GECTİ"):
+                    # Egitim konusundan ID bul
+                    konu = k.get("egitim_konusu","")
+                    for eid, e in EGITIMLER.items():
+                        if e.get("baslik","") == konu:
+                            gecilen.add(eid)
+                            break
+    except Exception as e:
+        logger.warning(f"Sheets tamamlanan okuma hatasi: {e}")
+
+    # 2. durum.json'daki listeyle birlestir
+    d = _oku()
+    json_liste = d.get("tamamlananlar", {}).get(str(user_id), [])
+    gecilen.update(json_liste)
+
+    return list(gecilen)
 
 
 def tekrar_izni_ver(user_id: int, egitim_id: str):
