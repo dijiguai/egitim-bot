@@ -76,20 +76,24 @@ async def egitim_baslat(app):
         if izinli_mi(user_id, bugun):
             logger.info(f"{calisan['ad_soyad']} izinli — atlandı.")
             continue
+        if not user_id or user_id <= 0:
+            logger.warning(f"{calisan['ad_soyad']} icin gecerli Telegram ID yok, atlandi")
+            continue
         try:
             ad = calisan['ad_soyad'].split()[0]
             await app.bot.send_message(
                 chat_id=user_id,
                 text=(
-                    f"👷 Günaydın *{ad}*!\n\n"
-                    f"Bugünkü eğitim: *{egitim['baslik']}*\n"
-                    f"⏰ Saat 17:00'ye kadar tamamlamanız gerekiyor 👇"
+                    f"Gunaydin *{ad}*!\n\n"
+                    f"Bugunun egitimi: *{egitim['baslik']}*\n"
+                    f"Saat 17:00'ye kadar tamamlayin."
                 ),
                 parse_mode="Markdown", reply_markup=markup
             )
-            await asyncio.sleep(0.1)
+            logger.info(f"Bildirim gonderildi: {calisan['ad_soyad']}")
+            await asyncio.sleep(0.3)
         except Exception as e:
-            logger.warning(f"{calisan['ad_soyad']} bildirimi gönderilemedi: {e}")
+            logger.warning(f"{calisan['ad_soyad']} bildirimi gonderilemedi: {e}")
 
 
 async def egitim_kapat(app):
