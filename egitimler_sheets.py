@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SEKME = "Egitimler"
-SUTUNLAR = ["id", "baslik", "tur", "sure", "metin", "sorular_json"]
+SUTUNLAR = ["id", "baslik", "tur", "sure", "metin", "sorular_json", "firmalar"]
 
 _cache = None  # Bellekte tutuyoruz, her istekte Sheets'e gitmeyelim
 
@@ -53,12 +53,14 @@ def tum_egitimler() -> dict:
                 sorular = json.loads(satir[5]) if len(satir) > 5 and satir[5] else []
             except:
                 sorular = []
+            firmalar_str = satir[6] if len(satir) > 6 else ""
             egitimler[eid] = {
-                "baslik": satir[1] if len(satir) > 1 else "",
-                "tur":    satir[2] if len(satir) > 2 else "",
-                "sure":   satir[3] if len(satir) > 3 else "",
-                "metin":  satir[4] if len(satir) > 4 else "",
-                "sorular": sorular
+                "baslik":   satir[1] if len(satir) > 1 else "",
+                "tur":      satir[2] if len(satir) > 2 else "",
+                "sure":     satir[3] if len(satir) > 3 else "",
+                "metin":    satir[4] if len(satir) > 4 else "",
+                "sorular":  sorular,
+                "firmalar": [f.strip() for f in firmalar_str.split(",") if f.strip()] if firmalar_str else []
             }
         _cache = egitimler
         return egitimler
@@ -67,10 +69,11 @@ def tum_egitimler() -> dict:
         return _cache or {}
 
 
-def egitim_ekle(eid: str, baslik: str, tur: str, sure: str, metin: str, sorular: list):
+def egitim_ekle(eid: str, baslik: str, tur: str, sure: str, metin: str, sorular: list, firmalar: list = None):
     _baslik_kontrol()
     s, sid = _servis()
-    deger = [[eid, baslik, tur, sure, metin, json.dumps(sorular, ensure_ascii=False)]]
+    firmalar_str = ",".join(firmalar) if firmalar else ""
+    deger = [[eid, baslik, tur, sure, metin, json.dumps(sorular, ensure_ascii=False), firmalar_str]]
     s.values().append(spreadsheetId=sid, range=f"{SEKME}!A1",
         valueInputOption="RAW", insertDataOption="INSERT_ROWS",
         body={"values": deger}).execute()
@@ -123,7 +126,7 @@ def egitim_sil(eid: str) -> bool:
         return False
 
 
-def egitim_guncelle_tam(eid: str, baslik=None, tur=None, sure=None, metin=None, sorular=None):
+def egitim_guncelle_tam(eid: str, baslik=None, tur=None, sure=None, metin=None, sorular=None, firmalar=None):
     """Tum alanlari guncelle."""
     try:
         s, sid = _servis()
@@ -137,7 +140,10 @@ def egitim_guncelle_tam(eid: str, baslik=None, tur=None, sure=None, metin=None, 
                 if tur     is not None: mevcut[2] = tur
                 if sure    is not None: mevcut[3] = sure
                 if metin   is not None: mevcut[4] = metin
-                if sorular is not None: mevcut[5] = json.dumps(sorular, ensure_ascii=False)
+                if sorular  is not None: mevcut[5] = json.dumps(sorular, ensure_ascii=False)
+                if firmalar is not None: 
+                    while len(mevcut) < 7: mevcut.append("")
+                    mevcut[6] = ",".join(firmalar)
                 s.values().update(spreadsheetId=sid,
                     range=f"{SEKME}!A{satir_no}",
                     valueInputOption="RAW",
@@ -148,6 +154,18 @@ def egitim_guncelle_tam(eid: str, baslik=None, tur=None, sure=None, metin=None, 
     except Exception as e:
         logger.error(f"Egitim tam guncelleme hatasi: {e}")
         return False
+
+
+def tum_egitimler_firma(firma_id: str) -> dict:
+    """Belirli bir firmaya ait egitimleri dondur.
+    firmalar alani bos ise tum firmalara ait demektir."""
+    tum = tum_egitimler()
+    sonuc = {}
+    for eid, e in tum.items():
+        firmalar = e.get("firmalar", [])
+        if not firmalar or firma_id in firmalar:
+            sonuc[eid] = e
+    return sonuc
 
 
 def config_egitimlerini_sheets_e_yukle(config_egitimler: dict):
