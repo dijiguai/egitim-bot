@@ -1,7 +1,7 @@
 """
-Otomatik zamanlayıcı
-- 08:00 → eğitim başlat (gruba + kişilere mesaj)
-- 17:00 → eğitimi kapat (gruba kapanış mesajı)
+Otomatik zamanlayici
+- 08:00 -> egitim baslat
+- 17:00 -> egitimi kapat
 """
 
 import logging
@@ -23,7 +23,7 @@ except ImportError:
 
 
 async def egitim_baslat(app):
-    """08:00 — eğitimi başlat."""
+    """08:00 - egitimi baslat."""
     from config import GRUP_ID
     from calisanlar import tum_calisanlar
     from durum import siradaki_egitim_al, izinli_mi, aktif_egitim_set
@@ -31,31 +31,30 @@ async def egitim_baslat(app):
 
     simdi = simdi_tr()
     gun = simdi.weekday()
-    if gun == 6:  # Pazar
-        logger.info("Pazar — eğitim yok.")
+    if gun == 6:
+        logger.info("Pazar - egitim yok.")
         return
 
     egitim_id, egitim = siradaki_egitim_al()
     if not egitim:
-        logger.error("Eğitim bulunamadı.")
+        logger.error("Egitim bulunamadi.")
         return
 
-    # Aktif eğitimi kaydet
     aktif_egitim_set(egitim_id)
 
     bugun = simdi.strftime("%d.%m.%Y")
-    gunler = ["Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi","Pazar"]
+    gunler = ["Pazartesi","Sali","Carsamba","Persembe","Cuma","Cumartesi","Pazar"]
 
-    keyboard = [[InlineKeyboardButton("▶️ Eğitime Başla", callback_data=f"egitim_baslat:{egitim_id}")]]
+    keyboard = [[InlineKeyboardButton("Egitime Basla", callback_data=f"egitim_baslat:{egitim_id}")]]
     markup = InlineKeyboardMarkup(keyboard)
 
     grup_metin = (
-        f"🔔 *{gunler[gun]} {bugun} — Günün Eğitimi*\n\n"
-        f"📋 *{egitim['baslik']}*\n"
-        f"🏷 Tür: {egitim['tur']} · ⏱ {egitim['sure']}\n"
-        f"✅ Geçme notu: 70/100\n\n"
-        f"⏰ Eğitim *saat 17:00*'ye kadar açık.\n"
-        f"İşe başlamadan önce tamamlayın 👇"
+        f"Bugunun Egitimi — {gunler[gun]} {bugun}\n\n"
+        f"{egitim['baslik']}\n"
+        f"Tur: {egitim['tur']} | Sure: {egitim['sure']}\n"
+        f"Gecme notu: 70/100\n\n"
+        f"Egitim saat 17:00'ye kadar acik.\n"
+        f"Ise baslamadan once tamamlayin"
     )
 
     if GRUP_ID and GRUP_ID != 0:
@@ -64,20 +63,17 @@ async def egitim_baslat(app):
                 chat_id=GRUP_ID, text=grup_metin,
                 parse_mode="Markdown", reply_markup=markup
             )
-            # Mesaj ID'sini kaydet (akşam güncellemek için)
             aktif_egitim_set(egitim_id, grup_mesaj_id=msg.message_id)
-            logger.info(f"Grup mesajı gönderildi: {egitim['baslik']}")
+            logger.info(f"Grup mesaji gonderildi: {egitim['baslik']}")
         except Exception as e:
-            logger.error(f"Grup mesajı hatası: {e}")
+            logger.error(f"Grup mesaji hatasi: {e}")
 
-    # Kişisel bildirimler
     calisanlar = tum_calisanlar()
     for user_id, calisan in calisanlar.items():
         if izinli_mi(user_id, bugun):
-            logger.info(f"{calisan['ad_soyad']} izinli — atlandı.")
             continue
         if not user_id or user_id <= 0:
-            logger.warning(f"{calisan['ad_soyad']} icin gecerli Telegram ID yok, atlandi")
+            logger.warning(f"{calisan['ad_soyad']} icin gecerli ID yok, atlandi")
             continue
         try:
             ad = calisan['ad_soyad'].split()[0]
@@ -97,49 +93,73 @@ async def egitim_baslat(app):
 
 
 async def egitim_kapat(app):
-    """17:00 — eğitimi kapat, tamamlamayanları bildir."""
+    """17:00 - egitimi kapat, tamamlayanlar ve tamamlamayanlar Sheets'ten okunur."""
     from config import GRUP_ID
     from calisanlar import tum_calisanlar
-    from durum import aktif_egitim_al, aktif_egitim_temizle, bugun_tamamlayanlar
-    from sheets import kayitlari_getir
+    from durum import aktif_egitim_al, aktif_egitim_temizle
+    from sheets import tum_kayitlar_getir
     from datetime import date
 
-    durum = aktif_egitim_al()
-    if not durum:
-        return
-
-    egitim_id = durum.get("egitim_id")
     bugun = date.today().strftime("%d.%m.%Y")
 
-    # Bugün tamamlayanları bul
-    tamamlayanlar = bugun_tamamlayanlar(bugun)
+    # Sheets'ten bugunun kayitlarini cek
+    try:
+        tum_kayitlar = tum_kayitlar_getir()
+        bugun_kayitlar = [k for k in tum_kayitlar if k.get("tarih") == bugun]
+    except Exception as e:
+        logger.error(f"Kayit okuma hatasi: {e}")
+        bugun_kayitlar = []
+
     calisanlar = tum_calisanlar()
 
-    tamamlamayan = [
-        c["ad_soyad"]
-        for uid, c in calisanlar.items()
-        if str(uid) not in tamamlayanlar
-    ]
+    # Calisan bazi kayit haritasi
+    calisan_kayit_map = {}
+    for k in bugun_kayitlar:
+        tid = str(k.get("telegram_id", ""))
+        if tid:
+            calisan_kayit_map.setdefault(tid, []).append(k)
 
-    # Gruba kapanış mesajı
+    gecenler = []
+    tamamlamayan = []
+
+    for uid, c in calisanlar.items():
+        tid_str = str(uid)
+        kayitlar = calisan_kayit_map.get(tid_str, [])
+        if kayitlar:
+            gecti = any(k.get("durum","") in ("GECTI","GECTİ") for k in kayitlar)
+            en_iyi = max((int(k.get("puan","0") or 0) for k in kayitlar), default=0)
+            if gecti:
+                gecenler.append(f"• {c['ad_soyad']} — {en_iyi} puan")
+            else:
+                tamamlamayan.append(c["ad_soyad"])
+        else:
+            tamamlamayan.append(c["ad_soyad"])
+
     if GRUP_ID and GRUP_ID != 0:
         try:
-            metin = f"🔒 *Bugünkü eğitim sona erdi.*\n\n"
+            satirlar = ["Bugunki egitim sona erdi.", ""]
+            if gecenler:
+                satirlar.append(f"Tamamlayanlar ({len(gecenler)}):")
+                satirlar.extend(gecenler)
+                satirlar.append("")
             if tamamlamayan:
-                metin += f"⚠️ Eğitimi tamamlamamış çalışanlar:\n"
-                metin += "\n".join([f"• {ad}" for ad in tamamlamayan])
-                metin += f"\n\nYönetici gerekli görürse tekrar açabilir."
-            else:
-                metin += "✅ Tüm çalışanlar eğitimi tamamladı, tebrikler!"
+                satirlar.append(f"Tamamlamayanlar ({len(tamamlamayan)}):")
+                satirlar.extend([f"• {ad}" for ad in tamamlamayan])
+                satirlar.append("")
+                satirlar.append("Yonetici gerekli gorurse tekrar acabilir.")
+            if not gecenler and not tamamlamayan:
+                satirlar.append("Bugun hic katilim olmadi.")
 
+            metin = "\n".join(satirlar)
             await app.bot.send_message(
-                chat_id=GRUP_ID, text=metin, parse_mode="Markdown"
+                chat_id=GRUP_ID, text=metin
             )
+            logger.info(f"Kapanis: {len(gecenler)} gecti, {len(tamamlamayan)} tamamlamadi")
         except Exception as e:
-            logger.error(f"Kapanış mesajı hatası: {e}")
+            logger.error(f"Kapanis mesaji hatasi: {e}")
 
     aktif_egitim_temizle()
-    logger.info("Günlük eğitim kapatıldı.")
+    logger.info("Gunluk egitim kapatildi.")
 
 
 def zamanlayici_baslat(app):
@@ -153,7 +173,6 @@ def zamanlayici_baslat(app):
                 bugun_08 = simdi.replace(hour=8, minute=0, second=0, microsecond=0)
                 bugun_17 = simdi.replace(hour=17, minute=0, second=0, microsecond=0)
 
-                # Sıradaki tetikleyiciyi bul
                 tetikleyiciler = []
                 if simdi < bugun_08:
                     tetikleyiciler.append((bugun_08, "ac"))
@@ -161,7 +180,6 @@ def zamanlayici_baslat(app):
                     tetikleyiciler.append((bugun_17, "kapat"))
 
                 if not tetikleyiciler:
-                    # Yarın 08:00
                     yarin_08 = bugun_08 + timedelta(days=1)
                     tetikleyiciler.append((yarin_08, "ac"))
 
@@ -177,8 +195,8 @@ def zamanlayici_baslat(app):
                     loop.run_until_complete(egitim_kapat(app))
 
             except Exception as e:
-                logger.error(f"Zamanlayıcı hatası: {e}")
+                logger.error(f"Zamanlayici hatasi: {e}")
                 time.sleep(60)
 
     threading.Thread(target=dongu, daemon=True).start()
-    logger.info("Zamanlayıcı başlatıldı (08:00 aç / 17:00 kapat).")
+    logger.info("Zamanlayici baslatildi (08:00 ac / 17:00 kapat).")
