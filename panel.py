@@ -252,6 +252,7 @@ textarea.form-input{min-height:80px;resize:vertical}
         <div class="section-title" style="margin:0">Mevcut Eğitimler</div>
         <div style="font-size:12px;color:var(--muted);margin-top:4px">Telegram'da: <code style="background:#f0ede8;padding:2px 6px;border-radius:4px">/egitim_gonder [kod]</code></div>
       </div>
+      <button class="btn btn-dark btn-sm" onclick="manuelEgitimModalAc()">📝 Manuel Ekle</button>
       <button class="btn btn-ai" onclick="aiModalAc()">✨ Yapay Zeka ile Üret</button>
     </div>
     <div id="egitim-liste"><div class="loading"><div class="spinner"></div></div></div>
@@ -381,6 +382,40 @@ textarea.form-input{min-height:80px;resize:vertical}
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn btn-primary" style="flex:1" onclick="firmaKaydet()">Kaydet</button>
       <button class="btn btn-dark" onclick="modalKapat('firma-ekle-modal')">İptal</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="manuel-egitim-modal">
+  <div class="modal" style="max-width:600px;width:95vw">
+    <div class="modal-title">📝 Manuel Eğitim Ekle</div>
+    <div class="form-group">
+      <label class="form-label">Başlık *</label>
+      <input type="text" class="form-input" id="me-baslik" placeholder="örn: 🔥 Yangın Güvenliği">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Tür</label>
+        <input type="text" class="form-input" id="me-tur" placeholder="örn: İş Güvenliği">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Süre</label>
+        <input type="text" class="form-input" id="me-sure" placeholder="örn: ~10 dakika">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Eğitim Metni * <span style="color:var(--muted);font-weight:400">(*kalın* için yıldız kullanın)</span></label>
+      <textarea class="form-input" id="me-metin" rows="6" style="resize:vertical;font-size:13px" placeholder="Eğitim içeriğini buraya yazın..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sorular * <span style="color:var(--muted);font-weight:400">(her satıra bir soru)</span></label>
+      <div id="me-sorular-konteyner"></div>
+      <button class="btn btn-dark btn-sm" style="margin-top:8px" onclick="meYeniSoruEkle()">+ Soru Ekle</button>
+    </div>
+    <div id="me-hata" class="alert alert-red" style="display:none"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="manuelEgitimKaydet()">Kaydet</button>
+      <button class="btn btn-dark" onclick="modalKapat('manuel-egitim-modal')">İptal</button>
     </div>
   </div>
 </div>
@@ -1042,6 +1077,115 @@ function renderEgitimler(egitimler) {
         </div>
       </div>
     </div>`).join('');
+}
+
+// ── MANUEL EGITIM ────────────────────────
+let meSoruSayisi = 0;
+
+function manuelEgitimModalAc() {
+  document.getElementById('me-baslik').value = '';
+  document.getElementById('me-tur').value = 'Is Guvenligi';
+  document.getElementById('me-sure').value = '~10 dakika';
+  document.getElementById('me-metin').value = '';
+  document.getElementById('me-hata').style.display = 'none';
+  meSoruSayisi = 0;
+  document.getElementById('me-sorular-konteyner').innerHTML = '';
+  // 3 bos soru ile baslat
+  meYeniSoruEkle();
+  meYeniSoruEkle();
+  meYeniSoruEkle();
+  document.getElementById('manuel-egitim-modal').classList.add('open');
+}
+
+function meYeniSoruEkle() {
+  meSoruSayisi++;
+  const n = meSoruSayisi;
+  const div = document.createElement('div');
+  div.id = 'me-soru-' + n;
+  div.style.cssText = 'background:var(--bg);border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid var(--border)';
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:12px;font-weight:700;color:var(--muted)">SORU ${n}</span>
+      <button onclick="document.getElementById('me-soru-${n}').remove()" style="background:none;border:none;cursor:pointer;color:var(--red)">✕</button>
+    </div>
+    <input type="text" class="form-input" id="me-s${n}-soru" placeholder="Soru metni?" style="margin-bottom:6px;font-size:13px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+      <input type="text" class="form-input" id="me-s${n}-a" placeholder="A şıkkı" style="font-size:12px">
+      <input type="text" class="form-input" id="me-s${n}-b" placeholder="B şıkkı" style="font-size:12px">
+      <input type="text" class="form-input" id="me-s${n}-c" placeholder="C şıkkı" style="font-size:12px">
+      <input type="text" class="form-input" id="me-s${n}-d" placeholder="D şıkkı" style="font-size:12px">
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+      <span style="color:var(--muted)">Doğru şık:</span>
+      <label><input type="radio" name="me-dogru-${n}" value="0"> A</label>
+      <label><input type="radio" name="me-dogru-${n}" value="1"> B</label>
+      <label><input type="radio" name="me-dogru-${n}" value="2"> C</label>
+      <label><input type="radio" name="me-dogru-${n}" value="3" checked> D</label>
+    </div>`;
+  document.getElementById('me-sorular-konteyner').appendChild(div);
+}
+
+async function manuelEgitimKaydet() {
+  const baslik = document.getElementById('me-baslik').value.trim();
+  const tur = document.getElementById('me-tur').value.trim() || 'Is Guvenligi';
+  const sure = document.getElementById('me-sure').value.trim() || '~10 dakika';
+  const metin = document.getElementById('me-metin').value.trim();
+  const hataEl = document.getElementById('me-hata');
+
+  if(!baslik || !metin) {
+    hataEl.textContent = 'Baslik ve egitim metni zorunludur.';
+    hataEl.style.display = 'block';
+    return;
+  }
+
+  // Sorulari topla
+  const sorular = [];
+  const soruDivler = document.querySelectorAll('[id^="me-soru-"]');
+  for(const div of soruDivler) {
+    const n = div.id.replace('me-soru-','');
+    const soru = document.getElementById('me-s'+n+'-soru')?.value.trim();
+    const a = document.getElementById('me-s'+n+'-a')?.value.trim();
+    const b = document.getElementById('me-s'+n+'-b')?.value.trim();
+    const c = document.getElementById('me-s'+n+'-c')?.value.trim();
+    const d = document.getElementById('me-s'+n+'-d')?.value.trim();
+    const dogru = document.querySelector('input[name="me-dogru-'+n+'"]:checked')?.value;
+    if(soru && a && b) {
+      sorular.push({
+        soru, secenekler: [a, b||'C', c||'D', d||'E'],
+        dogru: parseInt(dogru||'0')
+      });
+    }
+  }
+
+  if(sorular.length < 2) {
+    hataEl.textContent = 'En az 2 soru gereklidir.';
+    hataEl.style.display = 'block';
+    return;
+  }
+
+  // ID olustur
+  import_re: const egitim_id = baslik.toLowerCase()
+    .replace(/[^a-z0-9À-ɏ]/gi, '_')
+    .replace(/_+/g, '_').slice(0,30) + '_' + Date.now().toString().slice(-4);
+
+  try {
+    const r = await fetch('/panel/api/egitim-manuel-ekle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({baslik, tur, sure, metin, sorular})
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      modalKapat('manuel-egitim-modal');
+      egitimListesiYukle();
+    } else {
+      hataEl.textContent = 'Hata: ' + (d.hata||'Bilinmeyen');
+      hataEl.style.display = 'block';
+    }
+  } catch(e) {
+    hataEl.textContent = 'Baglanti hatasi';
+    hataEl.style.display = 'block';
+  }
 }
 
 async function egitimSil(id, baslik, btn) {
@@ -1758,6 +1902,35 @@ def api_ekstra_hak():
             "reply_markup": keyboard
         }, timeout=10)
         return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/egitim-manuel-ekle", methods=["POST"])
+def api_egitim_manuel_ekle():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    baslik = veri.get("baslik","").strip()
+    tur = veri.get("tur","Is Guvenligi").strip()
+    sure = veri.get("sure","~10 dakika").strip()
+    metin = veri.get("metin","").strip()
+    sorular = veri.get("sorular",[])
+
+    if not baslik or not metin or len(sorular) < 2:
+        return jsonify({"basarili":False,"hata":"Eksik bilgi"})
+
+    import re, unicodedata, time
+    eid = unicodedata.normalize('NFKD', baslik.lower())
+    eid = eid.encode('ascii','ignore').decode('ascii')
+    eid = re.sub(r'[^a-z0-9]','_', eid)
+    eid = re.sub(r'_+','_', eid).strip('_')[:25]
+    eid = eid + '_' + str(int(time.time()))[-4:]
+
+    try:
+        EGITIMLER[eid] = {"baslik":baslik,"tur":tur,"sure":sure,"metin":metin,"sorular":sorular}
+        from egitimler_sheets import egitim_ekle
+        egitim_ekle(eid, baslik, tur, sure, metin, sorular)
+        return jsonify({"basarili":True,"id":eid})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
 
