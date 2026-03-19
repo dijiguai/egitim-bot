@@ -186,7 +186,7 @@ textarea.form-input{min-height:80px;resize:vertical}
 
   <!-- KAYITLAR -->
   <!-- ANA SAYFA — Firma Kartları -->
-  <div id="ana-sayfa" style="padding:32px 24px">
+  <div id="ana-sayfa" style="padding:32px 24px;display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
       <div>
         <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700">Firmalar</div>
@@ -655,13 +655,64 @@ function anaSeyfayaDon() {
   document.getElementById('ana-tabs').style.display = 'none';
   document.getElementById('filtre-bar').style.display = 'none';
   document.getElementById('ana-sayfa').style.display = 'block';
-  document.getElementById('geri-btn').style.display = 'none';
-  document.getElementById('aktif-firma-adi').style.display = 'none';
+  if(document.getElementById('geri-btn')) document.getElementById('geri-btn').style.display = 'none';
+  if(document.getElementById('aktif-firma-adi')) document.getElementById('aktif-firma-adi').style.display = 'none';
   document.querySelectorAll('.tab-content').forEach(t => {
     t.classList.remove('active');
     t.style.display = '';
   });
-  firmaKartlariniYukle();
+  // Firma kartlarini yukle
+  fetch('/panel/api/firmalar-detay')
+    .then(r => r.json())
+    .then(firmalar => {
+      const k = document.getElementById('firma-kartlari');
+      if(!k) return;
+      if(!firmalar.length) {
+        k.innerHTML = `<div class="egitim-kart" style="text-align:center;padding:40px;cursor:pointer;grid-column:1/-1" onclick="firmaEkleModalAc()">
+          <div style="font-size:40px;margin-bottom:12px">➕</div>
+          <div style="font-weight:700">İlk Firmayı Ekle</div>
+        </div>`;
+        return;
+      }
+      k.innerHTML = firmalar.map(f => `
+        <div class="egitim-kart" style="cursor:pointer" onclick="firmaAc('${f.firma_id}','${f.ad}')">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+            <div>
+              <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px">${f.ad}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:4px">Grup ID: ${f.grup_id||'—'}</div>
+            </div>
+            <div style="width:44px;height:44px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">🏭</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif">${f.calisan_sayisi}</div>
+              <div style="font-size:11px;color:var(--muted)">Çalışan</div>
+            </div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:var(--green)">${f.bugun_tamamlayan}</div>
+              <div style="font-size:11px;color:var(--muted)">Bugün Geçti</div>
+            </div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:var(--accent)">${f.toplam_kayit}</div>
+              <div style="font-size:11px;color:var(--muted)">Toplam Kayıt</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-dark btn-sm" onclick="event.stopPropagation();firmaDuzenle('${f.firma_id}','${f.ad}','${f.grup_id}')">✏️</button>
+            <button class="btn btn-red btn-sm" onclick="event.stopPropagation();firmaSil('${f.firma_id}','${f.ad}')">🗑</button>
+            <button class="btn btn-primary" style="flex:1" onclick="event.stopPropagation();firmaAc('${f.firma_id}','${f.ad}')">Yönet →</button>
+          </div>
+        </div>`).join('') +
+        `<div class="egitim-kart" style="cursor:pointer;border:2px dashed var(--border);background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px"
+             onclick="firmaEkleModalAc()">
+          <div style="font-size:32px;margin-bottom:8px">➕</div>
+          <div style="font-weight:600;color:var(--muted)">Yeni Firma Ekle</div>
+        </div>`;
+    })
+    .catch(e => {
+      const k = document.getElementById('firma-kartlari');
+      if(k) k.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi: '+e.message+'</div>';
+    });
 }
 
 function firmaEkleModalAc() {
