@@ -1661,60 +1661,104 @@ def api_egitimler():
 @app.route("/panel/api/egitim-uret", methods=["POST"])
 def api_egitim_uret():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
-    veri=request.get_json()
-    konu=veri.get("konu","").strip()
-    sektor=veri.get("sektor","Çimento fabrikası")
-    notlar=veri.get("notlar","")
-    if not konu: return jsonify({"basarili":False,"hata":"Konu boş"})
-    api_key=os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key: return jsonify({"basarili":False,"hata":"ANTHROPIC_API_KEY ayarlanmamış"})
-    prompt=f"""Aşağıdaki bilgilere göre bir iş başı eğitimi hazırla.
-Konu: {konu}
-Sektör: {sektor}
-Ek notlar: {notlar if notlar else "Yok"}
+    veri = request.get_json()
+    konu = veri.get("konu","").strip()
+    sektor = veri.get("sektor","Cimento fabrikasi")
+    notlar = veri.get("notlar","")
+    if not konu: return jsonify({"basarili":False,"hata":"Konu bos"})
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key: return jsonify({"basarili":False,"hata":"ANTHROPIC_API_KEY ayarlanmamis"})
 
-SADECE JSON döndür:
-{{"id":"ingilizce_kisa_anahtar","baslik":"Emoji + Türkçe başlık","tur":"İş Güvenliği","sure":"~XX dakika","metin":"Telegram Markdown eğitim metni, *kalın* kullan, 5 bölüm olsun","sorular":[{{"soru":"?","secenekler":["A","B","C","D"],"dogru":0}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":1}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":2}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":0}},{{"soru":"?","secenekler":["A","B","C","D"],"dogru":3}}]}}"""
+    sistem = "Sen bir is guvenligi egitim uzmanisin. Verilen konuda Turkce egitim materyali olusturursun."
+
+    icerik = (
+        "Konu: " + konu + "\n"
+        "Sektor: " + sektor + "\n"
+        "Notlar: " + (notlar if notlar else "yok") + "\n\n"
+        "Asagidaki formatta egitim olustur:\n\n"
+        "BASLIK: [emoji ve baslik]\n"
+        "TUR: [kategori]\n"
+        "SURE: [sure]\n"
+        "METIN_BASLANGIC\n"
+        "[egitim metni - *kalin* yaz]\n"
+        "METIN_BITIS\n"
+        "SORU1: [soru]\n"
+        "A1: [a] | B1: [b] | C1: [c] | D1: [d] | DOGRU1: [A/B/C/D]\n"
+        "SORU2: [soru]\n"
+        "A2: [a] | B2: [b] | C2: [c] | D2: [d] | DOGRU2: [A/B/C/D]\n"
+        "SORU3: [soru]\n"
+        "A3: [a] | B3: [b] | C3: [c] | D3: [d] | DOGRU3: [A/B/C/D]\n"
+        "SORU4: [soru]\n"
+        "A4: [a] | B4: [b] | C4: [c] | D4: [d] | DOGRU4: [A/B/C/D]\n"
+        "SORU5: [soru]\n"
+        "A5: [a] | B5: [b] | C5: [c] | D5: [d] | DOGRU5: [A/B/C/D]\n"
+    )
+
     try:
-        import requests as req_lib
+        import requests as req_lib, time as tm, unicodedata
         resp = req_lib.post(
             "https://api.anthropic.com/v1/messages",
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01"
-            },
-            json={"model": "claude-opus-4-5", "max_tokens": 2000, "messages": [{"role": "user", "content": prompt}]},
+            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"},
+            json={"model":"claude-opus-4-5","max_tokens":3000,
+                  "system":sistem,"messages":[{"role":"user","content":icerik}]},
             timeout=60
         )
         if not resp.ok:
-            return jsonify({"basarili": False, "hata": f"API Hata {resp.status_code}: {resp.text[:300]}"})
-        yanit = resp.json()
-        icerik = yanit["content"][0]["text"].strip()
-        # Markdown kod bloklarini temizle
-        icerik = re.sub(r"^```json\s*", "", icerik, flags=re.MULTILINE)
-        icerik = re.sub(r"^```\s*", "", icerik, flags=re.MULTILINE)
-        icerik = re.sub(r"```\s*$", "", icerik, flags=re.MULTILINE).strip()
-        # JSON icindeki satir sonlarini duzelт
-        try:
-            egitim = json.loads(icerik)
-        except json.JSONDecodeError:
-            # JSON bulunamazsa {} icinde ara
-            eslesme = re.search(r'\{.*\}', icerik, re.DOTALL)
-            if eslesme:
-                egitim = json.loads(eslesme.group())
-            else:
-                return jsonify({"basarili": False, "hata": f"JSON parse hatasi. Ham yanit: {icerik[:200]}"})
-        yeni = {"baslik": egitim["baslik"], "tur": egitim["tur"], "sure": egitim["sure"], "metin": egitim["metin"], "sorular": egitim["sorular"]}
-        EGITIMLER[egitim["id"]] = yeni
+            return jsonify({"basarili":False,"hata":"API "+str(resp.status_code)+": "+resp.text[:200]})
+
+        ham = resp.json()["content"][0]["text"].strip()
+
+        def al(anahtar):
+            for satir in ham.split("\n"):
+                s = satir.strip()
+                if s.startswith(anahtar+":"):
+                    return s.split(":",1)[1].strip()
+                if "|" in s:
+                    for parca in s.split("|"):
+                        p = parca.strip()
+                        if p.startswith(anahtar+":"):
+                            return p.split(":",1)[1].strip()
+            return ""
+
+        def metin_blok():
+            try:
+                return ham.split("METIN_BASLANGIC")[1].split("METIN_BITIS")[0].strip()
+            except:
+                return konu + " hakkinda egitim."
+
+        baslik = al("BASLIK") or konu
+        tur = al("TUR") or "Is Guvenligi"
+        sure = al("SURE") or "~10 dakika"
+        egitim_metni = metin_blok()
+
+        harf = {"A":0,"B":1,"C":2,"D":3}
+        sorular = []
+        for i in range(1,6):
+            soru = al("SORU"+str(i))
+            a = al("A"+str(i))
+            b = al("B"+str(i))
+            c = al("C"+str(i))
+            d = al("D"+str(i))
+            dogru = harf.get(al("DOGRU"+str(i)).upper()[:1], 0)
+            if soru and a:
+                sorular.append({"soru":soru,"secenekler":[a,b or "Diger",c or "Diger",d or "Hicbiri"],"dogru":dogru})
+
+        if len(sorular) < 3:
+            return jsonify({"basarili":False,"hata":"Yeterli soru uretilmedi. Tekrar deneyin."})
+
+        eid = unicodedata.normalize("NFKD",konu.lower()).encode("ascii","ignore").decode("ascii")
+        eid = re.sub(r"[^a-z0-9]","_",eid)
+        eid = re.sub(r"_+","_",eid).strip("_")[:20]+"_"+str(int(tm.time()))[-4:]
+
+        EGITIMLER[eid] = {"baslik":baslik,"tur":tur,"sure":sure,"metin":egitim_metni,"sorular":sorular}
         try:
             from egitimler_sheets import egitim_ekle
-            egitim_ekle(egitim["id"], egitim["baslik"], egitim["tur"], egitim["sure"], egitim["metin"], egitim["sorular"])
+            egitim_ekle(eid,baslik,tur,sure,egitim_metni,sorular)
         except Exception as se:
-            logger.warning(f"Sheets kayit hatasi: {se}")
-        return jsonify({"basarili": True, "id": egitim["id"], "baslik": egitim["baslik"]})
+            logger.warning("Sheets kayit: "+str(se))
+        return jsonify({"basarili":True,"id":eid,"baslik":baslik})
     except Exception as e:
-        return jsonify({"basarili": False, "hata": str(e)})
+        return jsonify({"basarili":False,"hata":str(e)})
 
 @app.route("/panel/api/egitim-gonder", methods=["POST"])
 def api_egitim_gonder():
