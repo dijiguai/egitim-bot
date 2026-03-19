@@ -390,6 +390,12 @@ textarea.form-input{min-height:80px;resize:vertical}
   <div class="modal" style="max-width:600px;width:95vw">
     <div class="modal-title">📝 Manuel Eğitim Ekle</div>
     <div class="form-group">
+      <label class="form-label">Firmalar <span style="color:var(--muted);font-weight:400">(seçilmezse tüm firmalarda görünür)</span></label>
+      <div id="me-firma-secim" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:12px;color:var(--muted)">Yükleniyor...</div>
+      </div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Başlık *</label>
       <input type="text" class="form-input" id="me-baslik" placeholder="örn: 🔥 Yangın Güvenliği">
     </div>
@@ -438,6 +444,12 @@ textarea.form-input{min-height:80px;resize:vertical}
   <div class="modal">
     <div id="ai-form">
       <div class="modal-title">✨ Yapay Zeka ile Eğitim Üret</div>
+      <div class="form-group">
+        <label class="form-label">Firmalar <span style="color:var(--muted);font-weight:400">(seçilmezse tüm firmalarda görünür)</span></label>
+        <div id="ai-firma-secim" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--muted)">Yükleniyor...</div>
+        </div>
+      </div>
       <div class="modal-sub">Konu girin, yapay zeka eğitim metnini ve soruları hazırlasın.</div>
       <div class="form-group"><label class="form-label">Eğitim Konusu *</label><input type="text" class="form-input" id="ai-konu" placeholder="örn: Vinç Güvenliği"></div>
       <div class="form-group"><label class="form-label">Sektör</label><input type="text" class="form-input" id="ai-sektor" value="Çimento fabrikası"></div>
@@ -1055,7 +1067,7 @@ async function izinKaydet() {
 async function egitimListesiYukle() {
   document.getElementById('egitim-liste').innerHTML='<div class="loading"><div class="spinner"></div></div>';
   try {
-    const r = await fetch('/panel/api/egitimler');
+    const r = await fetch(`/panel/api/egitimler?firma_id=${aktifFirma||''}`);
     renderEgitimler(await r.json());
   } catch(e) { document.getElementById('egitim-liste').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>'; }
 }
@@ -1069,6 +1081,7 @@ function renderEgitimler(egitimler) {
         <div style="font-size:12px;color:var(--muted);white-space:nowrap">${e.sure} · ${e.soru_sayisi} soru</div>
       </div>
       <div class="egitim-kart-body">${e.metin_onizleme}</div>
+      ${e.firma_etiketi ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">🏭 ${e.firma_etiketi}</div>` : '<div style="font-size:11px;color:var(--muted);margin-top:6px">🌐 Tüm firmalar</div>'}
       <div class="egitim-kart-footer">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="egitimGonder('${e.id}', this)">▶️ Şimdi Gönder</button>
@@ -1082,6 +1095,25 @@ function renderEgitimler(egitimler) {
 // ── MANUEL EGITIM ────────────────────────
 let meSoruSayisi = 0;
 
+function firmaSecimDoldur(konteyner_id) {
+  const div = document.getElementById(konteyner_id);
+  if(!div) return;
+  fetch('/panel/api/firmalar')
+    .then(r => r.json())
+    .then(firmalar => {
+      div.innerHTML = firmalar.map(f => `
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 10px;background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:12px">
+          <input type="checkbox" name="${konteyner_id}-firma" value="${f.firma_id}"> ${f.ad}
+        </label>`).join('');
+    })
+    .catch(() => { div.innerHTML = '<div style="font-size:12px;color:var(--muted)">Yüklenemedi</div>'; });
+}
+
+function seciliFirmalariAl(konteyner_id) {
+  return Array.from(document.querySelectorAll(`#${konteyner_id} input[type=checkbox]:checked`))
+    .map(cb => cb.value);
+}
+
 function manuelEgitimModalAc() {
   document.getElementById('me-baslik').value = '';
   document.getElementById('me-tur').value = 'Is Guvenligi';
@@ -1094,6 +1126,7 @@ function manuelEgitimModalAc() {
   meYeniSoruEkle();
   meYeniSoruEkle();
   meYeniSoruEkle();
+  firmaSecimDoldur('me-firma-secim');
   document.getElementById('manuel-egitim-modal').classList.add('open');
 }
 
@@ -1167,10 +1200,11 @@ async function manuelEgitimKaydet() {
   // egitim_id sunucu tarafinda olusturuluyor, burada gerek yok
 
   try {
+    const firmalar = seciliFirmalariAl('me-firma-secim');
     const r = await fetch('/panel/api/egitim-manuel-ekle', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({baslik, tur, sure, metin, sorular})
+      body: JSON.stringify({baslik, tur, sure, metin, sorular, firmalar})
     });
     const d = await r.json();
     if(d.basarili) {
@@ -1470,7 +1504,7 @@ async function egitimUret() {
   document.getElementById('ai-form').style.display='none';
   document.getElementById('ai-progress').style.display='block';
   try {
-    const r=await fetch('/panel/api/egitim-uret',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({konu,sektor:document.getElementById('ai-sektor').value,notlar:document.getElementById('ai-notlar').value})});
+    const r=await fetch('/panel/api/egitim-uret',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({konu,sektor:document.getElementById('ai-sektor').value,notlar:document.getElementById('ai-notlar').value,firmalar:seciliFirmalariAl('ai-firma-secim')})});
     const d=await r.json();
     if(d.basarili){
       document.getElementById('ai-progress').style.display='none';
@@ -1652,10 +1686,21 @@ def api_izin_ekle():
 @app.route("/panel/api/egitimler")
 def api_egitimler():
     if not session.get("panel_giris"): return jsonify([]),401
+    firma_id = request.args.get("firma_id","")
     liste=[]
     for eid,e in EGITIMLER.items():
+        # Firma filtresi — firmalar bos ise herkese goster
+        egitim_firmalari = e.get("firmalar",[])
+        if firma_id and egitim_firmalari and firma_id not in egitim_firmalari:
+            continue
         temiz=e["metin"].replace("*","").replace("_","").strip()
-        liste.append({"id":eid,"baslik":e["baslik"],"tur":e["tur"],"sure":e["sure"],"soru_sayisi":len(e["sorular"]),"metin_onizleme":(temiz[:180]+"...") if len(temiz)>180 else temiz})
+        firma_etiketi = ""
+        if egitim_firmalari:
+            firma_etiketi = " | ".join(egitim_firmalari)
+        liste.append({"id":eid,"baslik":e["baslik"],"tur":e["tur"],"sure":e["sure"],
+                      "soru_sayisi":len(e["sorular"]),
+                      "metin_onizleme":(temiz[:180]+"...") if len(temiz)>180 else temiz,
+                      "firmalar":egitim_firmalari,"firma_etiketi":firma_etiketi})
     return jsonify(liste)
 
 @app.route("/panel/api/egitim-uret", methods=["POST"])
@@ -1665,6 +1710,7 @@ def api_egitim_uret():
     konu = veri.get("konu","").strip()
     sektor = veri.get("sektor","Cimento fabrikasi")
     notlar = veri.get("notlar","")
+    firmalar = veri.get("firmalar", [])
     if not konu: return jsonify({"basarili":False,"hata":"Konu bos"})
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key: return jsonify({"basarili":False,"hata":"ANTHROPIC_API_KEY ayarlanmamis"})
@@ -1750,10 +1796,10 @@ def api_egitim_uret():
         eid = re.sub(r"[^a-z0-9]","_",eid)
         eid = re.sub(r"_+","_",eid).strip("_")[:20]+"_"+str(int(tm.time()))[-4:]
 
-        EGITIMLER[eid] = {"baslik":baslik,"tur":tur,"sure":sure,"metin":egitim_metni,"sorular":sorular}
+        EGITIMLER[eid] = {"baslik":baslik,"tur":tur,"sure":sure,"metin":egitim_metni,"sorular":sorular,"firmalar":firmalar}
         try:
             from egitimler_sheets import egitim_ekle
-            egitim_ekle(eid,baslik,tur,sure,egitim_metni,sorular)
+            egitim_ekle(eid,baslik,tur,sure,egitim_metni,sorular,firmalar)
         except Exception as se:
             logger.warning("Sheets kayit: "+str(se))
         return jsonify({"basarili":True,"id":eid,"baslik":baslik})
@@ -1967,6 +2013,7 @@ def api_egitim_manuel_ekle():
     sure = veri.get("sure","~10 dakika").strip()
     metin = veri.get("metin","").strip()
     sorular = veri.get("sorular",[])
+    firmalar = veri.get("firmalar", [])
 
     if not baslik or not metin or len(sorular) < 2:
         return jsonify({"basarili":False,"hata":"Eksik bilgi"})
@@ -1979,9 +2026,9 @@ def api_egitim_manuel_ekle():
     eid = eid + '_' + str(int(time.time()))[-4:]
 
     try:
-        EGITIMLER[eid] = {"baslik":baslik,"tur":tur,"sure":sure,"metin":metin,"sorular":sorular}
+        EGITIMLER[eid] = {"baslik":baslik,"tur":tur,"sure":sure,"metin":metin,"sorular":sorular,"firmalar":firmalar}
         from egitimler_sheets import egitim_ekle
-        egitim_ekle(eid, baslik, tur, sure, metin, sorular)
+        egitim_ekle(eid, baslik, tur, sure, metin, sorular, firmalar)
         return jsonify({"basarili":True,"id":eid})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
