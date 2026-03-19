@@ -664,31 +664,6 @@ function anaSeyfayaDon() {
   firmaKartlariniYukle();
 }
 
-function renderFirmaKartlari(firmalar) {
-  const container = document.getElementById('firma-kartlari');
-  if(!firmalar.length) {
-    container.innerHTML = `
-      <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
-        <div style="font-size:48px;margin-bottom:16px">🏢</div>
-        <div style="font-size:16px;margin-bottom:8px">Henüz firma eklenmedi</div>
-        <button class="btn btn-primary" onclick="firmaEkleModalAc()">+ İlk Firmayı Ekle</button>
-      </div>`;
-    return;
-  }
-  container.innerHTML = firmalar.map(f => `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;cursor:pointer;transition:box-shadow .2s" 
-         onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)'"
-         onmouseout="this.style.boxShadow='none'"
-         onclick="firmaAc('${f.firma_id}','${f.ad}')">
-      <div style="font-size:32px;margin-bottom:12px">🏢</div>
-      <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:4px">${f.ad}</div>
-      <div style="font-size:12px;color:var(--muted)">Grup ID: ${f.grup_id || '—'}</div>
-      <div style="margin-top:16px">
-        <span style="background:var(--primary);color:#fff;padding:6px 14px;border-radius:8px;font-size:13px">Yönet →</span>
-      </div>
-    </div>`).join('');
-}
-
 function firmaEkleModalAc() {
   document.getElementById('f-ad').value = '';
   document.getElementById('f-grupid').value = '';
@@ -717,7 +692,7 @@ async function firmaKaydet() {
     const d = await r.json();
     if(d.basarili) {
       modalKapat('firma-ekle-modal');
-      await firmalariYukle();
+      anaSeyfayaDon();
       alert(`"${ad}" firması eklendi! Sheets'te sekmeler otomatik oluşturuldu.`);
     } else {
       hataEl.textContent = 'Hata: ' + (d.hata || 'Bilinmeyen');
@@ -1098,7 +1073,7 @@ let meSoruSayisi = 0;
 function firmaSecimDoldur(konteyner_id) {
   const div = document.getElementById(konteyner_id);
   if(!div) return;
-  fetch('/panel/api/firmalar')
+  fetch('/panel/api/firmalar-detay')
     .then(r => r.json())
     .then(firmalar => {
       div.innerHTML = firmalar.map(f => `
