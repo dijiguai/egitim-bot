@@ -1221,9 +1221,33 @@ async function manuelEgitimKaydet() {
 }
 
 async function egitimSil(id, baslik, btn) {
-  if(!confirm(baslik + ' eğitimini silmek istediğinizden emin misiniz?')) return;
+  // Egitim baska firmalarda da var mi?
+  const r0 = await fetch('/panel/api/egitim-detay?id='+id);
+  const d0 = await r0.json();
+  const firmalar = d0.egitim?.firmalar || [];
+
+  let kapsam = 'tum';
+  if(firmalar.length > 1 || (firmalar.length === 0)) {
+    // Birden fazla firmada veya tum firmalarda
+    const secim = confirm(
+      '"' + baslik + '" eğitimi birden fazla firmada mevcut.
+
+' +
+      'Tamam = Sadece bu firmadan kaldır (diğerlerinde kalır)
+' +
+      'İptal = Tüm firmalardan sil'
+    );
+    kapsam = secim ? 'bu_firma' : 'tum';
+    if(kapsam === 'tum' && !confirm('Tüm firmalardan silmek istediğinizden emin misiniz?')) return;
+  } else {
+    if(!confirm('"' + baslik + '" eğitimini silmek istediğinizden emin misiniz?')) return;
+  }
+
   btn.textContent = '⏳'; btn.disabled = true;
-  const r = await fetch('/panel/api/egitim-sil', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({egitim_id:id})});
+  const r = await fetch('/panel/api/egitim-sil', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({egitim_id:id, kapsam:kapsam, firma_id:aktifFirma})
+  });
   const d = await r.json();
   if(d.basarili) {
     document.getElementById('ekart-'+id)?.remove();
@@ -1272,9 +1296,28 @@ async function egitimDuzenleKaydet() {
   }
   hataEl.style.display = 'none';
 
+  // Birden fazla firmada mi kontrol et
+  let kapsam = 'tum';
+  try {
+    const r0 = await fetch('/panel/api/egitim-detay?id='+id);
+    const d0 = await r0.json();
+    const firmalar = d0.egitim?.firmalar || [];
+    if(firmalar.length > 1 || firmalar.length === 0) {
+      const secim = confirm(
+        'Bu eğitim birden fazla firmada mevcut.
+
+' +
+        'Tamam = Sadece bu firmadaki kopyayı güncelle
+' +
+        'İptal = Tüm firmalarda güncelle'
+      );
+      kapsam = secim ? 'bu_firma' : 'tum';
+    }
+  } catch(e) {}
+
   const r = await fetch('/panel/api/egitim-guncelle', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({egitim_id:id, baslik, tur, sure, metin, sorular})
+    body:JSON.stringify({egitim_id:id, baslik, tur, sure, metin, sorular, kapsam, firma_id:aktifFirma})
   });
   const d = await r.json();
   if(d.basarili) { modalKapat('egitim-duzenle-modal'); egitimListesiYukle(); }
@@ -2039,14 +2082,26 @@ def api_egitim_sil():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
     veri = request.get_json()
     eid = veri.get("egitim_id","").strip()
+    kapsam = veri.get("kapsam","tum")  # 'tum' veya 'bu_firma'
+    firma_id = veri.get("firma_id","")
     try:
-        from egitimler_sheets import egitim_sil, tum_egitimler
-        basarili = egitim_sil(eid)
-        if basarili:
-            if eid in EGITIMLER: del EGITIMLER[eid]
-            EGITIMLER.update(tum_egitimler())
+        from egitimler_sheets import egitim_sil, egitim_guncelle_tam, tum_egitimler
+        if kapsam == "bu_firma" and firma_id:
+            # Sadece bu firmadan kaldir
+            egitim = EGITIMLER.get(eid,{})
+            firmalar = egitim.get("firmalar",[])
+            if firma_id in firmalar:
+                firmalar.remove(firma_id)
+            egitim_guncelle_tam(eid, firmalar=firmalar)
+            EGITIMLER[eid]["firmalar"] = firmalar
             return jsonify({"basarili":True})
-        return jsonify({"basarili":False,"hata":"Bulunamadi"})
+        else:
+            # Tamamen sil
+            basarili = egitim_sil(eid)
+            if basarili:
+                if eid in EGITIMLER: del EGITIMLER[eid]
+                return jsonify({"basarili":True})
+            return jsonify({"basarili":False,"hata":"Bulunamadi"})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
 
