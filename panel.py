@@ -186,7 +186,7 @@ textarea.form-input{min-height:80px;resize:vertical}
 
   <!-- KAYITLAR -->
   <!-- ANA SAYFA — Firma Kartları -->
-  <div id="ana-sayfa" style="padding:32px 24px;display:none">
+  <div id="ana-sayfa" style="padding:32px 24px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
       <div>
         <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700">Firmalar</div>
@@ -1255,14 +1255,7 @@ async function egitimSil(id, baslik, btn) {
   let kapsam = 'tum';
   if(firmalar.length > 1 || (firmalar.length === 0)) {
     // Birden fazla firmada veya tum firmalarda
-    const secim = confirm(
-      '"' + baslik + '" eğitimi birden fazla firmada mevcut.
-
-' +
-      'Tamam = Sadece bu firmadan kaldır (diğerlerinde kalır)
-' +
-      'İptal = Tüm firmalardan sil'
-    );
+    const secim = confirm('"' + baslik + '" egitimi birden fazla firmada mevcut.\n\nTamam = Sadece bu firmadan kaldir\nIptal = Tum firmalardan sil');
     kapsam = secim ? 'bu_firma' : 'tum';
     if(kapsam === 'tum' && !confirm('Tüm firmalardan silmek istediğinizden emin misiniz?')) return;
   } else {
@@ -1329,14 +1322,7 @@ async function egitimDuzenleKaydet() {
     const d0 = await r0.json();
     const firmalar = d0.egitim?.firmalar || [];
     if(firmalar.length > 1 || firmalar.length === 0) {
-      const secim = confirm(
-        'Bu eğitim birden fazla firmada mevcut.
-
-' +
-        'Tamam = Sadece bu firmadaki kopyayı güncelle
-' +
-        'İptal = Tüm firmalarda güncelle'
-      );
+      const secim = confirm('Bu egitim birden fazla firmada mevcut.\n\nTamam = Sadece bu firmadaki kopyayi guncelle\nIptal = Tum firmalarda guncelle');
       kapsam = secim ? 'bu_firma' : 'tum';
     }
   } catch(e) {}
@@ -1584,19 +1570,18 @@ async function egitimUret() {
 }
 
 // Sayfa acilinca ana sayfayi goster
-document.addEventListener("DOMContentLoaded", function() {
-  // Sayfa yenilemede firmay geri yukle
+// Sayfa yuklenince calistir
+window.onload = function() {
   try {
     const kaydedilen = sessionStorage.getItem('aktifFirma');
     const kaydedilenAdi = sessionStorage.getItem('aktifFirmaAdi');
     if(kaydedilen && kaydedilenAdi) {
-      // Firma kartlarini yukledikten sonra firmayı ac
       firmaAc(kaydedilen, kaydedilenAdi);
       return;
     }
   } catch(e) {}
   anaSeyfayaDon();
-});
+};
 </script>
 {% endif %}
 </body>
