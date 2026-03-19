@@ -1164,9 +1164,7 @@ async function manuelEgitimKaydet() {
   }
 
   // ID olustur
-  import_re: const egitim_id = baslik.toLowerCase()
-    .replace(/[^a-z0-9À-ɏ]/gi, '_')
-    .replace(/_+/g, '_').slice(0,30) + '_' + Date.now().toString().slice(-4);
+  // egitim_id sunucu tarafinda olusturuluyor, burada gerek yok
 
   try {
     const r = await fetch('/panel/api/egitim-manuel-ekle', {
