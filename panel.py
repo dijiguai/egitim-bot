@@ -1550,6 +1550,7 @@ function aiModalAc(){
   document.getElementById('ai-form').style.display='block';
   document.getElementById('ai-progress').style.display='none';
   document.getElementById('ai-success').style.display='none';
+  firmaSecimDoldur('ai-firma-secim');
   document.getElementById('ai-modal').classList.add('open');
 }
 
