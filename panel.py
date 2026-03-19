@@ -1691,10 +1691,20 @@ SADECE JSON döndür:
             return jsonify({"basarili": False, "hata": f"API Hata {resp.status_code}: {resp.text[:300]}"})
         yanit = resp.json()
         icerik = yanit["content"][0]["text"].strip()
-        icerik = re.sub(r"^```json\s*", "", icerik)
-        icerik = re.sub(r"^```\s*", "", icerik)
-        icerik = re.sub(r"\s*```$", "", icerik).strip()
-        egitim = json.loads(icerik)
+        # Markdown kod bloklarini temizle
+        icerik = re.sub(r"^```json\s*", "", icerik, flags=re.MULTILINE)
+        icerik = re.sub(r"^```\s*", "", icerik, flags=re.MULTILINE)
+        icerik = re.sub(r"```\s*$", "", icerik, flags=re.MULTILINE).strip()
+        # JSON icindeki satir sonlarini duzelт
+        try:
+            egitim = json.loads(icerik)
+        except json.JSONDecodeError:
+            # JSON bulunamazsa {} icinde ara
+            eslesme = re.search(r'\{.*\}', icerik, re.DOTALL)
+            if eslesme:
+                egitim = json.loads(eslesme.group())
+            else:
+                return jsonify({"basarili": False, "hata": f"JSON parse hatasi. Ham yanit: {icerik[:200]}"})
         yeni = {"baslik": egitim["baslik"], "tur": egitim["tur"], "sure": egitim["sure"], "metin": egitim["metin"], "sorular": egitim["sorular"]}
         EGITIMLER[egitim["id"]] = yeni
         try:
