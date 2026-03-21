@@ -806,6 +806,12 @@ function firmaAc(firma_id, firma_adi) {
 
   // 5. Veriyi yukle
   verileriYukle();
+  // Davetler sekmesi sonradan acilirsa ayarlar zaten yuklenir
+  // ama onceden aktifse simdi yukle
+  setTimeout(() => {
+    const davetTab = document.getElementById('tab-davetler');
+    if(davetTab && davetTab.classList.contains('active')) davetAyarlariYukle();
+  }, 500);
 }
 
 function anaSeyfayaDon() {
