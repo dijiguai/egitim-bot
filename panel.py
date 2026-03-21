@@ -1162,42 +1162,33 @@ async function davetListesiYukle() {
 }
 
 function renderDavetler(liste) {
+  const el = document.getElementById('davet-liste');
   if(!liste.length) {
-    document.getElementById('davet-liste').innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">📱</div>
-        <div>Henüz kimse eklenmemiş</div>
-        <button class="btn btn-primary" style="margin-top:16px" onclick="davetEkleModalAc()">+ İlk Kişiyi Ekle</button>
-      </div>`;
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📱</div><div>Henüz kimse eklenmemiş</div><button class="btn btn-primary" style="margin-top:16px" onclick="davetEkleModalAc()">+ İlk Kişiyi Ekle</button></div>';
     return;
   }
   const renkler = {bekliyor:'var(--muted)',gonderildi:'var(--yellow)',katildi:'var(--green)'};
   const etiket = {bekliyor:'⏳ Bekliyor',gonderildi:'📨 Gönderildi',katildi:'✅ Katıldı'};
-  document.getElementById('davet-liste').innerHTML = `
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Ad Soyad</th><th>Telefon</th><th>Durum</th>
-          <th>Davet Tarihi</th><th>Katılma</th><th>İşlem</th>
-        </tr></thead>
-        <tbody>
-          ${liste.map(d => `
-            <tr>
-              <td><strong>${d.ad_soyad}</strong></td>
-              <td style="font-family:monospace">${d.telefon}</td>
-              <td><span style="color:${renkler[d.durum]||'var(--muted)'};font-weight:600">${etiket[d.durum]||d.durum}</span></td>
-              <td style="color:var(--muted)">${d.davet_tarihi||'—'}</td>
-              <td style="color:var(--muted)">${d.katilma_tarihi||'—'}</td>
-              <td>
-                <div style="display:flex;gap:6px">
-                  ${d.durum !== 'katildi' ? `<button class="btn btn-primary btn-sm" onclick="davetGonder(${d.satir_no},'${d.ad_soyad}','${d.telefon}','${d.token}',this)">${d.durum==='gonderildi'?'↩ Tekrar':'📨 Gönder'}</button>` : ''}
-                  <button class="btn btn-red btn-sm" onclick="davetSil(${d.satir_no},this)">🗑</button>
-                </div>
-              </td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>`;
+  let satirlar = '';
+  for(const d of liste) {
+    const durum_renk = renkler[d.durum] || 'var(--muted)';
+    const durum_etiket = etiket[d.durum] || d.durum;
+    const gonder_btn = d.durum !== 'katildi'
+      ? '<button class="btn btn-primary btn-sm" onclick="davetGonder(' + d.satir_no + ','' + d.ad_soyad + '','' + d.telefon + '','' + d.token + '',this)">' + (d.durum==='gonderildi'?'↩ Tekrar':'📨 Gönder') + '</button>'
+      : '';
+    satirlar += '<tr>'
+      + '<td><strong>' + d.ad_soyad + '</strong></td>'
+      + '<td style="font-family:monospace">' + d.telefon + '</td>'
+      + '<td><span style="color:' + durum_renk + ';font-weight:600">' + durum_etiket + '</span></td>'
+      + '<td style="color:var(--muted)">' + (d.davet_tarihi||'—') + '</td>'
+      + '<td style="color:var(--muted)">' + (d.katilma_tarihi||'—') + '</td>'
+      + '<td><div style="display:flex;gap:6px">' + gonder_btn
+      + '<button class="btn btn-red btn-sm" onclick="davetSil(' + d.satir_no + ',this)">🗑</button>'
+      + '</div></td></tr>';
+  }
+  el.innerHTML = '<div class="table-wrap"><table>'
+    + '<thead><tr><th>Ad Soyad</th><th>Telefon</th><th>Durum</th><th>Davet Tarihi</th><th>Katılma</th><th>İşlem</th></tr></thead>'
+    + '<tbody>' + satirlar + '</tbody></table></div>';
 }
 
 function davetEkleModalAc() {
