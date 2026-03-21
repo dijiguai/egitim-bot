@@ -53,6 +53,61 @@ async def yeni_uye_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "ilk_gorulme": simdi, "son_mesaj": simdi, "mesaj_sayisi": 0
         }
 
+        # Davet listesinde bu kullanici var mi? (token olmadan gruba katilmis olabilir)
+        davet_bulundu = False
+        try:
+            from davetler import tum_davetler, davet_katildi_isaretle
+            from calisanlar import calisan_ekle
+            firma_id_lokal = firma_id or "varsayilan"
+            davetler = tum_davetler(firma_id_lokal)
+            # Ad benzerligine gore esle
+            ad_lower = ad.lower().replace("i", "i").replace("İ", "i")
+            for d in davetler:
+                if d.get("durum") == "katildi":
+                    continue
+                d_ad = d.get("ad_soyad","").lower()
+                if ad_lower and (ad_lower in d_ad or d_ad in ad_lower or
+                    ad.split()[0].lower() in d_ad):
+                    # Eslesme bulundu - kayit tamamla
+                    token = d.get("token","")
+                    if token:
+                        calisan_ekle(user_id, d["ad_soyad"], "00.00.0000", "Belirsiz", firma_id_lokal)
+                        davet_katildi_isaretle(token, user_id, firma_id_lokal)
+                        davet_bulundu = True
+                        try:
+                            await context.bot.send_message(
+                                chat_id=user_id,
+                                text=(
+                                    f"Hosgeldiniz *{d['ad_soyad'].split()[0]}*!\n\n"
+                                    f"Sisteme basariyla kayit oldunuz.\n"
+                                    f"Her sabah 08:00'de gunluk egitim bildiriminiz gelecek."
+                                ),
+                                parse_mode="Markdown"
+                            )
+                        except:
+                            pass
+                        break
+        except Exception as e:
+            logger.warning(f"Davet eslestirme hatasi: {e}")
+
+        # Davet bulunamadiysa bot linki gonder
+        if not davet_bulundu:
+            try:
+                from config import BOT_USERNAME
+                bot_link = f"https://t.me/{BOT_USERNAME}?start=kayit"
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=(
+                        f"Merhaba {ad}!\n\n"
+                        f"Egitim sistemine kayit olmak icin asagidaki butona basin:"
+                    ),
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("Sisteme Kayit Ol", url=bot_link)
+                    ]])
+                )
+            except Exception as e:
+                logger.warning(f"Bot linki gonderilemedi: {e}")
+
         keyboard = [[
             InlineKeyboardButton("Sisteme Ekle", callback_data=f"yeni_uye_ekle:{user_id}"),
             InlineKeyboardButton("Yoksay", callback_data=f"yeni_uye_yoksay:{user_id}")
@@ -66,6 +121,7 @@ async def yeni_uye_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"Ad: {ad}\n"
                         f"Kullanici adi: {username}\n"
                         f"ID: {user_id}\n"
+                        f"Davet eslesti: {'Evet' if davet_bulundu else 'Hayir'}\n"
                         f"Saat: {simdi}"
                     ),
                     reply_markup=InlineKeyboardMarkup(keyboard)
