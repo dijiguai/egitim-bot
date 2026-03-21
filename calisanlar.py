@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SUTUNLAR = ["telegram_id", "ad_soyad", "dogum_tarihi", "gorev", "aktif"]
+SUTUNLAR = ["telegram_id", "ad_soyad", "dogum_tarihi", "gorev", "aktif", "arsiv", "arsiv_tarihi"]
 
 
 def _to_int(val):
@@ -49,16 +49,27 @@ def _baslik_kontrol(sekme: str):
         logger.warning(f"Baslik kontrol ({sekme}): {e}")
 
 
-def tum_calisanlar(firma_id: str = None) -> dict:
+def tum_calisanlar(firma_id: str = None, arsiv: bool = False) -> dict:
+    """arsiv=False → aktif calisanlar, arsiv=True → arsivlenmiş calisanlar"""
     sekme = _calisanlar_sekme(firma_id)
     try:
         s, sid = _servis()
-        r = s.values().get(spreadsheetId=sid, range=f"{sekme}!A2:E").execute()
+        r = s.values().get(spreadsheetId=sid, range=f"{sekme}!A2:G").execute()
         calisanlar = {}
         for i, satir in enumerate(r.get("values", [])):
             if len(satir) < 3: continue
             aktif = satir[4] if len(satir) > 4 else "1"
-            if aktif == "0": continue
+            arsiv_flag = satir[5] if len(satir) > 5 else "0"
+            arsiv_tarihi = satir[6] if len(satir) > 6 else ""
+
+            if arsiv:
+                # Sadece arsivlenmiş
+                if arsiv_flag != "1": continue
+            else:
+                # Sadece aktif (silinmis ve arsivlenmiş haric)
+                if aktif == "0": continue
+                if arsiv_flag == "1": continue
+
             tid_str = satir[0].strip() if satir[0] else ""
             tid = _to_int(tid_str)
             key = tid if tid else -(i + 1)
@@ -66,7 +77,9 @@ def tum_calisanlar(firma_id: str = None) -> dict:
                 "ad_soyad":     satir[1] if len(satir) > 1 else "",
                 "dogum_tarihi": satir[2] if len(satir) > 2 else "",
                 "gorev":        satir[3] if len(satir) > 3 else "",
-                "aktif": True
+                "aktif":        True,
+                "arsiv":        arsiv_flag == "1",
+                "arsiv_tarihi": arsiv_tarihi
             }
         return calisanlar
     except Exception as e:
@@ -168,6 +181,55 @@ def calisan_ekle(telegram_id, ad_soyad: str, dogum_tarihi: str, gorev: str, firm
 
 def calisan_guncelle(telegram_id, ad_soyad: str, dogum_tarihi: str, gorev: str, firma_id: str = None):
     calisan_ekle(telegram_id, ad_soyad, dogum_tarihi, gorev, firma_id)
+
+
+def calisan_arsivle(telegram_id, firma_id: str = None):
+    """Calisani arsivle - kayitlari korunur, bildirimleri durur."""
+    from datetime import date
+    sekme = _calisanlar_sekme(firma_id)
+    tid = _to_int(telegram_id)
+    satir_no = _satir_bul(tid, sekme)
+    if not satir_no: return False
+    try:
+        s, sid = _servis()
+        r = s.values().get(spreadsheetId=sid, range=f"{sekme}!A{satir_no}:G{satir_no}").execute()
+        satirlar = r.get("values", [[]])
+        if not satirlar: return False
+        satir = satirlar[0] + [""] * 7
+        satir[4] = "0"  # aktif = 0
+        satir[5] = "1"  # arsiv = 1
+        satir[6] = date.today().strftime("%d.%m.%Y")  # arsiv_tarihi
+        s.values().update(spreadsheetId=sid, range=f"{sekme}!A{satir_no}",
+            valueInputOption="RAW", body={"values": [satir[:7]]}).execute()
+        logger.info(f"Calisan arsivlendi: {telegram_id} -> {sekme}")
+        return True
+    except Exception as e:
+        logger.error(f"Arsivleme hatasi: {e}")
+        return False
+
+
+def calisan_arsivden_al(telegram_id, firma_id: str = None):
+    """Arsivden geri al - tekrar aktif yap."""
+    sekme = _calisanlar_sekme(firma_id)
+    tid = _to_int(telegram_id)
+    satir_no = _satir_bul(tid, sekme)
+    if not satir_no: return False
+    try:
+        s, sid = _servis()
+        r = s.values().get(spreadsheetId=sid, range=f"{sekme}!A{satir_no}:G{satir_no}").execute()
+        satirlar = r.get("values", [[]])
+        if not satirlar: return False
+        satir = satirlar[0] + [""] * 7
+        satir[4] = "1"  # aktif = 1
+        satir[5] = "0"  # arsiv = 0
+        satir[6] = ""   # arsiv_tarihi temizle
+        s.values().update(spreadsheetId=sid, range=f"{sekme}!A{satir_no}",
+            valueInputOption="RAW", body={"values": [satir[:7]]}).execute()
+        logger.info(f"Calisan arsivden alindi: {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Arsivden alma hatasi: {e}")
+        return False
 
 
 def calisan_sil(telegram_id, firma_id: str = None):
