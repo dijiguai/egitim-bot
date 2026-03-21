@@ -591,6 +591,32 @@ textarea.form-input{min-height:80px;resize:vertical}
 
 <script>
 const bugun = new Date().toISOString().split('T')[0];
+
+async function ayarKaydet(anahtar, inputId) {
+  const input = document.getElementById(inputId);
+  const deger = input ? input.value.trim() : '';
+  if(!deger) { alert('Deger bos olamaz'); return; }
+  try {
+    const r = await fetch('/panel/api/ayar-kaydet', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({anahtar:anahtar, deger:deger})
+    });
+    const d = await r.json();
+    if(d.basarili) { alert('Kaydedildi!'); }
+    else { alert('Hata: ' + (d.hata||'Bilinmeyen')); }
+  } catch(e) { alert('Baglanti hatasi: ' + e.message); }
+}
+
+async function davetAyarlariYukle() {
+  try {
+    const r = await fetch('/panel/api/firma-grup-linki?firma_id=' + aktifFirma);
+    const d = await r.json();
+    const gl = document.getElementById('ayar-grup-link');
+    const at = document.getElementById('ayar-admin-tel');
+    if(gl && d.link) gl.value = d.link;
+    if(at && d.admin_tel) at.value = d.admin_tel;
+  } catch(e) {}
+}
 document.getElementById('tarih-bas').value = bugun;
 document.getElementById('tarih-bitis').value = bugun;
 
