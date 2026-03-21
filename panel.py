@@ -219,8 +219,14 @@ textarea.form-input{min-height:80px;resize:vertical}
   <!-- ÇALIŞANLAR -->
   <div class="tab-content" id="tab-calisanlar">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-      <div class="section-title" style="margin:0">Çalışan Listesi</div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="section-title" style="margin:0">Çalışan Listesi</div>
+        <div style="display:flex;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <button id="btn-aktif" class="btn btn-dark btn-sm" style="border-radius:0;border:none" onclick="calisanModGec('aktif')">👥 Aktif</button>
+          <button id="btn-arsiv" class="btn btn-sm" style="border-radius:0;border:none;background:transparent;color:var(--muted)" onclick="calisanModGec('arsiv')">📦 Arşiv</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px" id="aktif-butonlar">
         <button class="btn btn-dark btn-sm" onclick="kayitButonuGonder(this)">📌 Kayıt Butonu Gönder</button>
         <button class="btn btn-primary" onclick="calisanModalAc()">+ Çalışan Ekle</button>
       </div>
@@ -469,14 +475,27 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 </div>
 
+<div class="modal-overlay" id="arsivle-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">📦 Çalışanı Arşivle</div>
+    <div class="modal-sub" id="arsivle-adi-text"></div>
+    <p style="font-size:14px;margin-bottom:20px">Bu çalışan arşive taşınacak. Eğitim bildirimleri duracak, tüm kayıtlar korunacak. İstediğinizde geri alabilirsiniz.</p>
+    <input type="hidden" id="arsivle-tid">
+    <div class="modal-footer">
+      <button class="btn btn-primary" style="flex:1" onclick="calisanArsivleOnayla()">📦 Arşivle</button>
+      <button class="btn btn-dark" onclick="modalKapat('arsivle-modal')">İptal</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="sil-modal">
   <div class="modal" style="max-width:380px">
-    <div class="modal-title">Çalışanı Sil</div>
+    <div class="modal-title">⚠️ Kalıcı Sil</div>
     <div class="modal-sub" id="sil-adi-text"></div>
-    <p style="font-size:14px;margin-bottom:20px">Bu çalışan sistemden kalıcı olarak silinecek. Eğitim kayıtları korunacak.</p>
+    <p style="font-size:14px;margin-bottom:20px">Bu çalışan <strong>kalıcı olarak silinecek</strong>. Eğitim kayıtları korunacak ama çalışan listeden tamamen kalkacak.<br><br>İşten ayrılan çalışanlar için <strong>📦 Arşivle</strong> butonunu kullanın.</p>
     <input type="hidden" id="sil-tid">
     <div class="modal-footer">
-      <button class="btn btn-red" style="flex:1" onclick="calisanSilOnayla()">Sil</button>
+      <button class="btn btn-red" style="flex:1" onclick="calisanSilOnayla()">Kalıcı Sil</button>
       <button class="btn btn-dark" onclick="modalKapat('sil-modal')">İptal</button>
     </div>
   </div>
@@ -1030,6 +1049,7 @@ function renderCalisanlar(calisanlar) {
           <button class="btn btn-orange btn-sm" onclick="ekstraHakVer(${c.telegram_id},'${c.ad_soyad}',this)" ${c.telegram_id<=0?'disabled':''} title="Bugün tekrar girebilsin">🔁 Tekrar İzni</button>
           <button class="btn btn-green btn-sm" onclick="izinModalAc(${c.telegram_id},'${c.ad_soyad}')">🏖 İzin</button>
           <button class="btn btn-dark btn-sm" onclick="calisanDuzenle(${c.telegram_id},'${c.ad_soyad}','${c.gorev}','${c.dogum_tarihi}')">✏️</button>
+          <button class="btn btn-dark btn-sm" onclick="arsivleModalAc(${c.telegram_id},'${c.ad_soyad}')">📦</button>
           <button class="btn btn-red btn-sm" onclick="silModalAc(${c.telegram_id},'${c.ad_soyad}')">🗑</button>
         </div>
       </div>
@@ -1092,6 +1112,98 @@ async function calisanKaydet() {
     if(d.basarili){modalKapat('calisan-modal');calisanListesiYukle();}
     else{hataEl.textContent=d.hata||'Hata oluştu.';hataEl.style.display='block';}
   } catch(e){hataEl.textContent='Bağlantı hatası.';hataEl.style.display='block';}
+}
+
+// ── ARŞİV ────────────────────────────────
+let calisanMod = 'aktif';
+
+function calisanModGec(mod) {
+  calisanMod = mod;
+  document.getElementById('btn-aktif').className = 'btn btn-sm' + (mod==='aktif' ? ' btn-dark' : '');
+  document.getElementById('btn-aktif').style.background = mod==='aktif' ? '' : 'transparent';
+  document.getElementById('btn-aktif').style.color = mod==='aktif' ? '' : 'var(--muted)';
+  document.getElementById('btn-arsiv').className = 'btn btn-sm' + (mod==='arsiv' ? ' btn-dark' : '');
+  document.getElementById('btn-arsiv').style.background = mod==='arsiv' ? '' : 'transparent';
+  document.getElementById('btn-arsiv').style.color = mod==='arsiv' ? '' : 'var(--muted)';
+  document.getElementById('aktif-butonlar').style.display = mod==='aktif' ? 'flex' : 'none';
+  if(mod === 'arsiv') arsivListesiYukle();
+  else calisanListesiYukle();
+}
+
+async function arsivListesiYukle() {
+  document.getElementById('calisan-liste').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch(`/panel/api/arsiv-calisanlar?firma_id=${aktifFirma}`);
+    const liste = await r.json();
+    if(!liste.length) {
+      document.getElementById('calisan-liste').innerHTML = '<div class="empty"><div class="empty-icon">📦</div>Arşivde çalışan yok</div>';
+      return;
+    }
+    document.getElementById('calisan-liste').innerHTML = liste.map(c => `
+      <div class="calisan-kart" style="opacity:0.85;border-left:3px solid var(--muted)">
+        <div class="calisan-kart-header">
+          <div>
+            <div class="calisan-ad">${c.ad_soyad} <span style="font-size:11px;background:#f0ede8;padding:2px 8px;border-radius:4px;color:var(--muted)">📦 Arşiv</span></div>
+            <div class="calisan-gorev">${c.gorev}</div>
+            <div class="calisan-id">Arşivlenme: ${c.arsiv_tarihi || '—'}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-green btn-sm" onclick="arsivdenAlOnayla(${c.telegram_id},'${c.ad_soyad}',this)">↩ Geri Al</button>
+            <button class="btn btn-dark btn-sm" onclick="arsivDetayGoster(${c.telegram_id},this)">📋 Detay</button>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:20px;font-size:12px;color:var(--muted)">
+          <span>✅ ${c.gecilen_egitim} eğitim geçti</span>
+          <span>📋 ${c.toplam_katilim} katılım</span>
+          <span>🗓 Son: ${c.son_egitim || '—'}</span>
+        </div>
+        <div id="arsiv-detay-${c.telegram_id}" style="display:none;margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;font-size:12px">
+          ${c.gecilen_liste.length ? '<div style="font-weight:700;margin-bottom:6px">Geçilen Eğitimler:</div>' + c.gecilen_liste.map(e => '<div style="padding:2px 0">✅ '+e+'</div>').join('') : '<div style="color:var(--muted)">Henüz geçilen eğitim yok</div>'}
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('calisan-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>';
+  }
+}
+
+function arsivDetayGoster(tid, btn) {
+  const div = document.getElementById('arsiv-detay-' + tid);
+  const acik = div.style.display !== 'none';
+  div.style.display = acik ? 'none' : 'block';
+  btn.textContent = acik ? '📋 Detay' : '🔼 Gizle';
+}
+
+function arsivleModalAc(tid, ad) {
+  document.getElementById('arsivle-tid').value = tid;
+  document.getElementById('arsivle-adi-text').textContent = '"' + ad + '" arşivlenecek.';
+  document.getElementById('arsivle-modal').classList.add('open');
+}
+
+async function calisanArsivleOnayla() {
+  const tid = document.getElementById('arsivle-tid').value;
+  try {
+    const r = await fetch('/panel/api/calisan-arsivle', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({telegram_id: parseInt(tid), firma_id: aktifFirma})
+    });
+    const d = await r.json();
+    if(d.basarili) { modalKapat('arsivle-modal'); calisanListesiYukle(); }
+    else { alert('Hata: ' + (d.hata||'')); }
+  } catch(e) { alert('Bağlantı hatası'); }
+}
+
+async function arsivdenAlOnayla(tid, ad, btn) {
+  if(!confirm('"' + ad + '" aktif listeye geri alınsın mı?')) return;
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/calisan-arsivden-al', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({telegram_id: tid, firma_id: aktifFirma})
+    });
+    const d = await r.json();
+    if(d.basarili) { calisanModGec('aktif'); }
+    else { alert('Hata: ' + (d.hata||'')); btn.textContent = '↩ Geri Al'; btn.disabled = false; }
+  } catch(e) { alert('Bağlantı hatası'); btn.textContent = '↩ Geri Al'; btn.disabled = false; }
 }
 
 function silModalAc(tid, ad) {
@@ -1851,12 +1963,71 @@ def api_calisan_guncelle():
         import traceback
         return jsonify({"basarili":False,"hata":str(e),"detay":traceback.format_exc()})
 
+@app.route("/panel/api/calisan-arsivle", methods=["POST"])
+def api_calisan_arsivle():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    tid = veri.get("telegram_id")
+    firma_id = veri.get("firma_id","varsayilan")
+    try:
+        from calisanlar import calisan_arsivle
+        basarili = calisan_arsivle(tid, firma_id)
+        return jsonify({"basarili":basarili})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/calisan-arsivden-al", methods=["POST"])
+def api_calisan_arsivden_al():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    tid = veri.get("telegram_id")
+    firma_id = veri.get("firma_id","varsayilan")
+    try:
+        from calisanlar import calisan_arsivden_al
+        basarili = calisan_arsivden_al(tid, firma_id)
+        return jsonify({"basarili":basarili})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/arsiv-calisanlar")
+def api_arsiv_calisanlar():
+    if not session.get("panel_giris"): return jsonify([]),401
+    firma_id = request.args.get("firma_id","varsayilan")
+    try:
+        from sheets import tum_kayitlar_getir
+        calisanlar = tum_calisanlar(firma_id, arsiv=True)
+        tum_kayitlar = tum_kayitlar_getir(firma_id)
+        liste = []
+        for tid, c in calisanlar.items():
+            tid_str = str(tid)
+            kayitlar = [k for k in tum_kayitlar if k.get("telegram_id") == tid_str]
+            gecilen = set(k.get("egitim_konusu") for k in kayitlar if k.get("durum") in ("GECTI","GECTİ"))
+            son_egitim = max((k.get("tarih","") for k in kayitlar), default="")
+            liste.append({
+                "telegram_id": tid,
+                "ad_soyad": c["ad_soyad"],
+                "gorev": c["gorev"],
+                "arsiv_tarihi": c.get("arsiv_tarihi",""),
+                "toplam_katilim": len(kayitlar),
+                "gecilen_egitim": len(gecilen),
+                "gecilen_liste": sorted(gecilen),
+                "son_egitim": son_egitim
+            })
+        return jsonify(liste)
+    except Exception as e:
+        return jsonify([])
+
+
 @app.route("/panel/api/calisan-sil", methods=["POST"])
 def api_calisan_sil():
     if not session.get("panel_giris"): return jsonify({"basarili":False}),401
-    d=request.get_json()
-    calisan_sil(int(d["telegram_id"])) if d.get("telegram_id") else None
+    d = request.get_json()
+    firma_id = d.get("firma_id","varsayilan")
+    calisan_sil(int(d["telegram_id"]), firma_id) if d.get("telegram_id") else None
     return jsonify({"basarili":True})
+
 
 @app.route("/panel/api/izin-ekle", methods=["POST"])
 def api_izin_ekle():
