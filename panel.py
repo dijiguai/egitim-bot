@@ -1201,14 +1201,24 @@ async function calisanKaydet() {
 
 async function davetListesiYukle() {
   document.getElementById('davet-liste').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const firma = aktifFirma || 'varsayilan';
   try {
-    const r = await fetch(`/panel/api/davetler?firma_id=${aktifFirma}`);
-    const veri = await r.json();
+    const url = '/panel/api/davetler?firma_id=' + firma;
+    console.log('Davet URL:', url);
+    const r = await fetch(url);
+    const metin = await r.text();
+    console.log('Davet API yanit:', metin.substring(0,200));
+    let veri;
+    try { veri = JSON.parse(metin); } catch(pe) {
+      document.getElementById('davet-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>JSON parse hatasi: ' + metin.substring(0,100) + '</div>';
+      return;
+    }
     if(!r.ok || (veri && veri.hata)) {
       document.getElementById('davet-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>API Hatasi: ' + (veri.hata||r.status) + '</div>';
       return;
     }
     const liste = Array.isArray(veri) ? veri : [];
+    console.log('Davet sayisi:', liste.length);
     renderDavetler(liste);
   } catch(e) {
     document.getElementById('davet-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>';
@@ -3068,10 +3078,10 @@ def api_ayar_kaydet():
         # Guncelle veya ekle
         guncellendi = False
         for i, satir in enumerate(satirlar):
-            if satir and satir[0] == anahtar:
+            if satir and satir[0].strip() == anahtar:
                 satir_no = i + 1
-                s.values().update(spreadsheetId=sid, range=f"Ayarlar!B{satir_no}",
-                    valueInputOption="RAW", body={"values":[[deger]]}).execute()
+                s.values().update(spreadsheetId=sid, range=f"Ayarlar!A{satir_no}:B{satir_no}",
+                    valueInputOption="RAW", body={"values":[[anahtar, deger]]}).execute()
                 guncellendi = True
                 break
         if not guncellendi:
