@@ -267,10 +267,33 @@ textarea.form-input{min-height:80px;resize:vertical}
 
   <!-- DAVETLER -->
   <div class="tab-content" id="tab-davetler">
+    <!-- Ayarlar bolumu -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px">
+      <div class="section-title" style="margin-bottom:12px">⚙️ Davet Ayarları</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Telegram Grup Davet Linki</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="ayar-grup-link" placeholder="https://t.me/+xxxxxxxx" style="flex:1">
+            <button class="btn btn-dark btn-sm" onclick="ayarKaydet('grup_link','ayar-grup-link')">💾</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Telegram grubu → Davet Linki Oluştur</div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Admin WhatsApp Numarası</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="ayar-admin-tel" placeholder="+905321234567" style="flex:1">
+            <button class="btn btn-dark btn-sm" onclick="ayarKaydet('admin_tel','ayar-admin-tel')">💾</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Mesajlar bu numara üzerinden gönderilir</div>
+        </div>
+      </div>
+    </div>
+    <!-- Liste -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div>
         <div class="section-title" style="margin:0">WhatsApp Davet Listesi</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">Telefon listesine ekle → wa.me linki ile davet gönder</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Kişi ekle → 📨 Gönder butonuna bas → WhatsApp açılır → Gönder</div>
       </div>
       <button class="btn btn-primary" onclick="davetEkleModalAc()">+ Kişi Ekle</button>
     </div>
@@ -2917,13 +2940,14 @@ def api_toplu_islem():
 
 @app.route("/panel/api/davetler")
 def api_davetler():
-    if not session.get("panel_giris"): return jsonify([]),401
+    if not session.get("panel_giris"): return jsonify({"hata":"giris yok"}),401
     firma_id = request.args.get("firma_id","varsayilan")
     try:
         from davetler import tum_davetler
         return jsonify(tum_davetler(firma_id))
     except Exception as e:
-        return jsonify([])
+        logger.error(f"Davetler API hatasi: {e}")
+        return jsonify({"hata":str(e)}), 500
 
 
 @app.route("/panel/api/davet-ekle", methods=["POST"])
@@ -2981,15 +3005,51 @@ def api_firma_grup_linki():
         from firma_manager import tum_firmalar
         firma = tum_firmalar().get(firma_id, {})
         grup_id = firma.get("grup_id", 0)
-        # Grup davet linkini Sheets'ten al (manuel girilmis olabilir)
         from durum import _sheets_index_oku
         ayarlar = _sheets_index_oku()
         link = ayarlar.get(f"grup_link_{firma_id}") or ayarlar.get("grup_link") or ""
+        admin_tel = ayarlar.get("admin_tel") or ""
         from config import BOT_USERNAME
-        return jsonify({"link": link, "grup_id": grup_id, "bot_username": BOT_USERNAME})
+        return jsonify({"link": link, "grup_id": grup_id, "bot_username": BOT_USERNAME, "admin_tel": admin_tel})
     except Exception as e:
         from config import BOT_USERNAME
-        return jsonify({"link":"","bot_username":BOT_USERNAME})
+        return jsonify({"link":"","bot_username":BOT_USERNAME,"admin_tel":""})
+
+
+@app.route("/panel/api/ayar-kaydet", methods=["POST"])
+def api_ayar_kaydet():
+    """Ayarlar sekmesine anahtar-deger cifti kaydet."""
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    anahtar = veri.get("anahtar","").strip()
+    deger = veri.get("deger","").strip()
+    if not anahtar:
+        return jsonify({"basarili":False,"hata":"Anahtar bos"})
+    try:
+        from sheets import _servis
+        s, sid = _servis()
+        # Mevcut satirlari oku
+        try:
+            r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B20").execute()
+            satirlar = r.get("values",[])
+        except:
+            satirlar = []
+        # Guncelle veya ekle
+        guncellendi = False
+        for i, satir in enumerate(satirlar):
+            if satir and satir[0] == anahtar:
+                satir_no = i + 1
+                s.values().update(spreadsheetId=sid, range=f"Ayarlar!B{satir_no}",
+                    valueInputOption="RAW", body={"values":[[deger]]}).execute()
+                guncellendi = True
+                break
+        if not guncellendi:
+            s.values().append(spreadsheetId=sid, range="Ayarlar!A1",
+                valueInputOption="RAW", insertDataOption="INSERT_ROWS",
+                body={"values":[[anahtar, deger]]}).execute()
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
 
 
 if __name__ == "__main__":
