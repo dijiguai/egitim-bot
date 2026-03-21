@@ -653,7 +653,7 @@ function sekme(ad, el) {
   if(ad==='calisanlar') calisanListesiYukle();
   if(ad==='egitimler') egitimListesiYukle();
   if(ad==='mesajlar') mesajLogYukle();
-  if(ad==='davetler') davetListesiYukle();
+  if(ad==='davetler') { davetListesiYukle(); davetAyarlariYukle(); }
 }
 
 // ── KAYITLAR ──────────────────────────────
@@ -1243,6 +1243,8 @@ async function davetListesiYukle() {
     }
     const liste = Array.isArray(veri) ? veri : [];
     console.log('Davet sayisi:', liste.length);
+    // Ayarları da yukle
+    davetAyarlariYukle();
     // Render
     const el = document.getElementById('davet-liste');
     if(!el) { console.error('davet-liste bulunamadi'); return; }
