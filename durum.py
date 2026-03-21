@@ -96,7 +96,7 @@ def _sheets_index_oku() -> dict:
     try:
         from sheets import _servis
         s, sid = _servis()
-        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B10").execute()
+        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:D20").execute()
         satirlar = r.get("values", [])
         ayarlar = {}
         for satir in satirlar:
