@@ -615,16 +615,25 @@ async function davetAyarlariYukle() {
   try {
     const r = await fetch('/panel/api/davet-ayarlari');
     const d = await r.json();
+    console.log('Ayarlar API yanit:', d);
+
     const gl = document.getElementById('ayar-grup-link');
     const at = document.getElementById('ayar-admin-tel');
-    if(gl) gl.value = d.grup_link || '';
-    if(at) at.value = d.admin_tel || '';
-    // Kayitli degerleri goster
     const glInfo = document.getElementById('ayar-grup-link-info');
     const atInfo = document.getElementById('ayar-admin-tel-info');
-    if(glInfo) glInfo.textContent = d.grup_link ? 'Kayıtlı: ' + d.grup_link.substring(0,40) + (d.grup_link.length>40?'...':'') : 'Henüz kaydedilmedi';
-    if(atInfo) atInfo.textContent = d.admin_tel ? 'Kayıtlı: ' + d.admin_tel : 'Henüz kaydedilmedi';
-  } catch(e) { console.error('Ayarlar yuklenemedi:', e); }
+
+    if(gl && d.grup_link) { gl.value = d.grup_link; console.log('grup_link set edildi:', d.grup_link); }
+    if(at && d.admin_tel) { at.value = d.admin_tel; console.log('admin_tel set edildi:', d.admin_tel); }
+
+    if(glInfo) glInfo.textContent = d.grup_link
+      ? 'Kayıtlı: ' + d.grup_link.substring(0,50) + (d.grup_link.length>50?'...':'')
+      : 'Henüz kaydedilmedi';
+    if(atInfo) atInfo.textContent = d.admin_tel
+      ? 'Kayıtlı: ' + d.admin_tel
+      : 'Henüz kaydedilmedi';
+  } catch(e) {
+    console.error('Ayarlar yuklenemedi:', e);
+  }
 }
 document.getElementById('tarih-bas').value = bugun;
 document.getElementById('tarih-bitis').value = bugun;
