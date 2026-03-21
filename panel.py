@@ -277,7 +277,8 @@ textarea.form-input{min-height:80px;resize:vertical}
             <input type="text" class="form-input" id="ayar-grup-link" placeholder="https://t.me/+xxxxxxxx" style="flex:1">
             <button class="btn btn-dark btn-sm" onclick="ayarKaydet('grup_link','ayar-grup-link')">💾</button>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Telegram grubu → Davet Linki Oluştur</div>
+          <div id="ayar-grup-link-info" style="font-size:11px;color:var(--accent);margin-top:4px;font-weight:600"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Telegram grubu → Davet Linki Oluştur</div>
         </div>
         <div class="form-group" style="margin:0">
           <label class="form-label">Admin WhatsApp Numarası</label>
@@ -285,7 +286,8 @@ textarea.form-input{min-height:80px;resize:vertical}
             <input type="text" class="form-input" id="ayar-admin-tel" placeholder="+905321234567" style="flex:1">
             <button class="btn btn-dark btn-sm" onclick="ayarKaydet('admin_tel','ayar-admin-tel')">💾</button>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Mesajlar bu numara üzerinden gönderilir</div>
+          <div id="ayar-admin-tel-info" style="font-size:11px;color:var(--accent);margin-top:4px;font-weight:600"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Mesajlar bu numara üzerinden gönderilir</div>
         </div>
       </div>
     </div>
@@ -602,21 +604,26 @@ async function ayarKaydet(anahtar, inputId) {
       body: JSON.stringify({anahtar:anahtar, deger:deger})
     });
     const d = await r.json();
-    if(d.basarili) { alert('Kaydedildi!'); }
-    else { alert('Hata: ' + (d.hata||'Bilinmeyen')); }
+    if(d.basarili) {
+      alert('Kaydedildi!');
+      davetAyarlariYukle();
+    } else { alert('Hata: ' + (d.hata||'Bilinmeyen')); }
   } catch(e) { alert('Baglanti hatasi: ' + e.message); }
 }
 
 async function davetAyarlariYukle() {
   try {
-    const firma = aktifFirma || 'varsayilan';
-    const r = await fetch('/panel/api/firma-grup-linki?firma_id=' + firma);
+    const r = await fetch('/panel/api/davet-ayarlari');
     const d = await r.json();
     const gl = document.getElementById('ayar-grup-link');
     const at = document.getElementById('ayar-admin-tel');
-    if(gl) gl.value = d.link || '';
+    if(gl) gl.value = d.grup_link || '';
     if(at) at.value = d.admin_tel || '';
-    console.log('Ayarlar yuklendi - link:', d.link, 'tel:', d.admin_tel);
+    // Kayitli degerleri goster
+    const glInfo = document.getElementById('ayar-grup-link-info');
+    const atInfo = document.getElementById('ayar-admin-tel-info');
+    if(glInfo) glInfo.textContent = d.grup_link ? 'Kayıtlı: ' + d.grup_link.substring(0,40) + (d.grup_link.length>40?'...':'') : 'Henüz kaydedilmedi';
+    if(atInfo) atInfo.textContent = d.admin_tel ? 'Kayıtlı: ' + d.admin_tel : 'Henüz kaydedilmedi';
   } catch(e) { console.error('Ayarlar yuklenemedi:', e); }
 }
 document.getElementById('tarih-bas').value = bugun;
@@ -3076,6 +3083,27 @@ def api_davet_sil():
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/davet-ayarlari")
+def api_davet_ayarlari():
+    if not session.get("panel_giris"): return jsonify({}),401
+    try:
+        from sheets import _servis
+        s, sid = _servis()
+        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B20").execute()
+        ayarlar = {}
+        for satir in r.get("values",[]):
+            if len(satir) >= 2 and satir[0]:
+                ayarlar[satir[0].strip()] = satir[1].strip() if satir[1] else ""
+        from config import BOT_USERNAME
+        return jsonify({
+            "grup_link": ayarlar.get("grup_link",""),
+            "admin_tel": ayarlar.get("admin_tel",""),
+            "bot_username": BOT_USERNAME
+        })
+    except Exception as e:
+        return jsonify({"grup_link":"","admin_tel":"","hata":str(e)})
 
 
 @app.route("/panel/api/firma-grup-linki")
