@@ -598,10 +598,13 @@ async function ayarKaydet(anahtar, inputId) {
   const input = document.getElementById(inputId);
   const deger = input ? input.value.trim() : '';
   if(!deger) { alert('Deger bos olamaz'); return; }
+  // Firma bazli anahtar olustur
+  const firma = aktifFirma || 'varsayilan';
+  const firmaAnahtar = anahtar + '_' + firma;
   try {
     const r = await fetch('/panel/api/ayar-kaydet', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({anahtar:anahtar, deger:deger})
+      body: JSON.stringify({anahtar: firmaAnahtar, deger: deger})
     });
     const d = await r.json();
     if(d.basarili) {
@@ -613,7 +616,8 @@ async function ayarKaydet(anahtar, inputId) {
 
 async function davetAyarlariYukle() {
   try {
-    const r = await fetch('/panel/api/davet-ayarlari');
+    const firma = aktifFirma || 'varsayilan';
+    const r = await fetch('/panel/api/davet-ayarlari?firma_id=' + firma);
     const d = await r.json();
     console.log('Ayarlar API yanit:', d);
 
@@ -622,8 +626,8 @@ async function davetAyarlariYukle() {
     const glInfo = document.getElementById('ayar-grup-link-info');
     const atInfo = document.getElementById('ayar-admin-tel-info');
 
-    if(gl && d.grup_link) { gl.value = d.grup_link; console.log('grup_link set edildi:', d.grup_link); }
-    if(at && d.admin_tel) { at.value = d.admin_tel; console.log('admin_tel set edildi:', d.admin_tel); }
+    if(gl) { gl.value = d.grup_link || ''; console.log('grup_link set edildi:', d.grup_link); }
+    if(at) { at.value = d.admin_tel || ''; console.log('admin_tel set edildi:', d.admin_tel); }
 
     if(glInfo) glInfo.textContent = d.grup_link
       ? 'Kayıtlı: ' + d.grup_link.substring(0,50) + (d.grup_link.length>50?'...':'')
@@ -1321,7 +1325,7 @@ async function davetGonder(satirNo, adSoyad, telefon, token, btn) {
   // Grup davet linkini al
   const grupR = await fetch(`/panel/api/firma-grup-linki?firma_id=${aktifFirma}`);
   const grupD = await grupR.json();
-  const grupLink = grupD.link || 'https://t.me/+GRUP_DAVET_LINKI';
+  const grupLink = grupD.grup_link || 'https://t.me/+GRUP_DAVET_LINKI';
   const botUsername = grupD.bot_username || 'toolbox_egitim_bot';
 
   const mesaj = encodeURIComponent(
@@ -3105,6 +3109,7 @@ def api_davet_sil():
 @app.route("/panel/api/davet-ayarlari")
 def api_davet_ayarlari():
     if not session.get("panel_giris"): return jsonify({"giris":"yok"}),401
+    firma_id = request.args.get("firma_id","varsayilan")
     try:
         import os
         from google.oauth2.service_account import Credentials
@@ -3114,7 +3119,7 @@ def api_davet_ayarlari():
             scopes=["https://www.googleapis.com/auth/spreadsheets"])
         s = build("sheets","v4",credentials=creds).spreadsheets()
         sid = os.environ.get("SPREADSHEET_ID")
-        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B20").execute()
+        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B30").execute()
         ayarlar = {}
         for satir in r.get("values",[]):
             if satir and len(satir) >= 2:
@@ -3122,11 +3127,13 @@ def api_davet_ayarlari():
             elif satir and len(satir) == 1:
                 ayarlar[str(satir[0]).strip()] = ""
         from config import BOT_USERNAME
+        # Once firma bazli bak, yoksa genel ayara bak
+        grup_link = ayarlar.get(f"grup_link_{firma_id}") or ayarlar.get("grup_link","")
+        admin_tel = ayarlar.get(f"admin_tel_{firma_id}") or ayarlar.get("admin_tel","")
         return jsonify({
-            "grup_link": ayarlar.get("grup_link",""),
-            "admin_tel": ayarlar.get("admin_tel",""),
-            "bot_username": BOT_USERNAME,
-            "tum_ayarlar": ayarlar
+            "grup_link": grup_link,
+            "admin_tel": admin_tel,
+            "bot_username": BOT_USERNAME
         })
     except Exception as e:
         logger.error(f"Davet ayarlari hatasi: {e}")
