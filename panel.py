@@ -169,6 +169,7 @@ textarea.form-input{min-height:80px;resize:vertical}
   <div class="tab" onclick="sekme('istatistik',this)">📈 İstatistik</div>
   <div class="tab" onclick="sekme('mesajlar',this)">💬 Grup Mesajları</div>
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
+  <div class="tab" onclick="sekme('davetler',this)">📱 Davetler</div>
 </div>
 
 <div class="main">
@@ -262,6 +263,18 @@ textarea.form-input{min-height:80px;resize:vertical}
       <button class="btn btn-ai" onclick="aiModalAc()">✨ Yapay Zeka ile Üret</button>
     </div>
     <div id="egitim-liste"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- DAVETLER -->
+  <div class="tab-content" id="tab-davetler">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div>
+        <div class="section-title" style="margin:0">WhatsApp Davet Listesi</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Telefon listesine ekle → wa.me linki ile davet gönder</div>
+      </div>
+      <button class="btn btn-primary" onclick="davetEkleModalAc()">+ Kişi Ekle</button>
+    </div>
+    <div id="davet-liste"><div class="loading"><div class="spinner"></div></div></div>
   </div>
 
 </div>
@@ -475,6 +488,26 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 </div>
 
+<div class="modal-overlay" id="davet-ekle-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">📱 Kişi Ekle</div>
+    <div class="modal-sub">WhatsApp davet listesine kişi ekleyin.</div>
+    <div class="form-group">
+      <label class="form-label">Ad Soyad *</label>
+      <input type="text" class="form-input" id="dv-ad" placeholder="Ahmet Yılmaz">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Telefon * <span style="color:var(--muted);font-weight:400">(05xxxxxxxxx)</span></label>
+      <input type="text" class="form-input" id="dv-tel" placeholder="05321234567">
+    </div>
+    <div id="dv-hata" class="alert alert-red" style="display:none"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="davetKaydet()">Ekle</button>
+      <button class="btn btn-dark" onclick="modalKapat('davet-ekle-modal')">İptal</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="arsivle-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-title">📦 Çalışanı Arşivle</div>
@@ -553,6 +586,7 @@ function sekme(ad, el) {
   if(ad==='calisanlar') calisanListesiYukle();
   if(ad==='egitimler') egitimListesiYukle();
   if(ad==='mesajlar') mesajLogYukle();
+  if(ad==='davetler') davetListesiYukle();
 }
 
 // ── KAYITLAR ──────────────────────────────
@@ -1112,6 +1146,140 @@ async function calisanKaydet() {
     if(d.basarili){modalKapat('calisan-modal');calisanListesiYukle();}
     else{hataEl.textContent=d.hata||'Hata oluştu.';hataEl.style.display='block';}
   } catch(e){hataEl.textContent='Bağlantı hatası.';hataEl.style.display='block';}
+}
+
+// ── DAVETLER ─────────────────────────────
+
+async function davetListesiYukle() {
+  document.getElementById('davet-liste').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch(`/panel/api/davetler?firma_id=${aktifFirma}`);
+    const liste = await r.json();
+    renderDavetler(liste);
+  } catch(e) {
+    document.getElementById('davet-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>';
+  }
+}
+
+function renderDavetler(liste) {
+  if(!liste.length) {
+    document.getElementById('davet-liste').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📱</div>
+        <div>Henüz kimse eklenmemiş</div>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="davetEkleModalAc()">+ İlk Kişiyi Ekle</button>
+      </div>`;
+    return;
+  }
+  const renkler = {bekliyor:'var(--muted)',gonderildi:'var(--yellow)',katildi:'var(--green)'};
+  const etiket = {bekliyor:'⏳ Bekliyor',gonderildi:'📨 Gönderildi',katildi:'✅ Katıldı'};
+  document.getElementById('davet-liste').innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Ad Soyad</th><th>Telefon</th><th>Durum</th>
+          <th>Davet Tarihi</th><th>Katılma</th><th>İşlem</th>
+        </tr></thead>
+        <tbody>
+          ${liste.map(d => `
+            <tr>
+              <td><strong>${d.ad_soyad}</strong></td>
+              <td style="font-family:monospace">${d.telefon}</td>
+              <td><span style="color:${renkler[d.durum]||'var(--muted)'};font-weight:600">${etiket[d.durum]||d.durum}</span></td>
+              <td style="color:var(--muted)">${d.davet_tarihi||'—'}</td>
+              <td style="color:var(--muted)">${d.katilma_tarihi||'—'}</td>
+              <td>
+                <div style="display:flex;gap:6px">
+                  ${d.durum !== 'katildi' ? `<button class="btn btn-primary btn-sm" onclick="davetGonder(${d.satir_no},'${d.ad_soyad}','${d.telefon}','${d.token}',this)">${d.durum==='gonderildi'?'↩ Tekrar':'📨 Gönder'}</button>` : ''}
+                  <button class="btn btn-red btn-sm" onclick="davetSil(${d.satir_no},this)">🗑</button>
+                </div>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function davetEkleModalAc() {
+  document.getElementById('dv-ad').value = '';
+  document.getElementById('dv-tel').value = '';
+  document.getElementById('dv-hata').style.display = 'none';
+  document.getElementById('davet-ekle-modal').classList.add('open');
+}
+
+async function davetKaydet() {
+  const ad = document.getElementById('dv-ad').value.trim();
+  const tel = document.getElementById('dv-tel').value.trim();
+  const hataEl = document.getElementById('dv-hata');
+  if(!ad || !tel) { hataEl.textContent='Ad ve telefon zorunludur.'; hataEl.style.display='block'; return; }
+  try {
+    const r = await fetch('/panel/api/davet-ekle', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ad_soyad:ad, telefon:tel, firma_id:aktifFirma})
+    });
+    const d = await r.json();
+    if(d.basarili) { modalKapat('davet-ekle-modal'); davetListesiYukle(); }
+    else { hataEl.textContent = d.hata || 'Hata'; hataEl.style.display='block'; }
+  } catch(e) { hataEl.textContent='Bağlantı hatası'; hataEl.style.display='block'; }
+}
+
+async function davetGonder(satirNo, adSoyad, telefon, token, btn) {
+  if(btn.textContent.includes('Tekrar')) {
+    if(!confirm('"'+adSoyad+'" kişisine daha önce davet gönderildi. Tekrar göndermek istiyor musunuz?')) return;
+  }
+
+  // Grup davet linkini al
+  const grupR = await fetch(`/panel/api/firma-grup-linki?firma_id=${aktifFirma}`);
+  const grupD = await grupR.json();
+  const grupLink = grupD.link || 'https://t.me/+GRUP_DAVET_LINKI';
+  const botUsername = grupD.bot_username || 'toolbox_egitim_bot';
+
+  const mesaj = encodeURIComponent(
+    'Merhaba ' + adSoyad + ',
+
+' +
+    'Is basi egitim sistemine davet edildiniz.
+
+' +
+    'Katilmak icin:
+' +
+    '1. Telefonunuzda Telegram yuklu degilse once yukleyin:
+' +
+    '   https://telegram.org/dl
+
+' +
+    '2. Telegram yuklendikten sonra asagidaki baglantiya tiklayin:
+' +
+    '   ' + grupLink + '
+
+' +
+    'Sorun yasarsaniz yoneticinizle iletisime gecin.'
+  );
+
+  // WhatsApp linkini ac
+  const waLink = 'https://wa.me/' + telefon.replace(/[^0-9]/g,'') + '?text=' + mesaj;
+  window.open(waLink, '_blank');
+
+  // Gonderildi olarak isaretle
+  await fetch('/panel/api/davet-gonderildi', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({satir_no: satirNo, firma_id: aktifFirma})
+  });
+  davetListesiYukle();
+}
+
+async function davetSil(satirNo, btn) {
+  if(!confirm('Bu kişiyi listeden kaldırmak istiyor musunuz?')) return;
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/davet-sil', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({satir_no: satirNo, firma_id: aktifFirma})
+    });
+    const d = await r.json();
+    if(d.basarili) davetListesiYukle();
+    else { alert('Hata: '+(d.hata||'')); btn.textContent='🗑'; btn.disabled=false; }
+  } catch(e) { alert('Bağlantı hatası'); btn.textContent='🗑'; btn.disabled=false; }
 }
 
 // ── ARŞİV ────────────────────────────────
@@ -2792,6 +2960,83 @@ def api_toplu_islem():
         return jsonify({"basarili":True,"etkilenen":etkilenen})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/davetler")
+def api_davetler():
+    if not session.get("panel_giris"): return jsonify([]),401
+    firma_id = request.args.get("firma_id","varsayilan")
+    try:
+        from davetler import tum_davetler
+        return jsonify(tum_davetler(firma_id))
+    except Exception as e:
+        return jsonify([])
+
+
+@app.route("/panel/api/davet-ekle", methods=["POST"])
+def api_davet_ekle():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    ad = veri.get("ad_soyad","").strip()
+    tel = veri.get("telefon","").strip()
+    firma_id = veri.get("firma_id","varsayilan")
+    if not ad or not tel:
+        return jsonify({"basarili":False,"hata":"Ad ve telefon zorunlu"})
+    try:
+        from davetler import davet_ekle
+        sonuc = davet_ekle(ad, tel, firma_id)
+        if "hata" in sonuc:
+            return jsonify({"basarili":False,"hata":sonuc["hata"]})
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/davet-gonderildi", methods=["POST"])
+def api_davet_gonderildi():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    satir_no = veri.get("satir_no")
+    firma_id = veri.get("firma_id","varsayilan")
+    try:
+        from davetler import davet_gonderildi_isaretle
+        davet_gonderildi_isaretle(satir_no, firma_id)
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/davet-sil", methods=["POST"])
+def api_davet_sil():
+    if not session.get("panel_giris"): return jsonify({"basarili":False}),401
+    veri = request.get_json()
+    satir_no = veri.get("satir_no")
+    firma_id = veri.get("firma_id","varsayilan")
+    try:
+        from davetler import davet_sil
+        davet_sil(satir_no, firma_id)
+        return jsonify({"basarili":True})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/firma-grup-linki")
+def api_firma_grup_linki():
+    if not session.get("panel_giris"): return jsonify({}),401
+    firma_id = request.args.get("firma_id","varsayilan")
+    try:
+        from firma_manager import tum_firmalar
+        firma = tum_firmalar().get(firma_id, {})
+        grup_id = firma.get("grup_id", 0)
+        # Grup davet linkini Sheets'ten al (manuel girilmis olabilir)
+        from durum import _sheets_index_oku
+        ayarlar = _sheets_index_oku()
+        link = ayarlar.get(f"grup_link_{firma_id}") or ayarlar.get("grup_link") or ""
+        from config import BOT_USERNAME
+        return jsonify({"link": link, "grup_id": grup_id, "bot_username": BOT_USERNAME})
+    except Exception as e:
+        from config import BOT_USERNAME
+        return jsonify({"link":"","bot_username":BOT_USERNAME})
 
 
 if __name__ == "__main__":
