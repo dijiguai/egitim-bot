@@ -1203,7 +1203,12 @@ async function davetListesiYukle() {
   document.getElementById('davet-liste').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const r = await fetch(`/panel/api/davetler?firma_id=${aktifFirma}`);
-    const liste = await r.json();
+    const veri = await r.json();
+    if(!r.ok || (veri && veri.hata)) {
+      document.getElementById('davet-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>API Hatasi: ' + (veri.hata||r.status) + '</div>';
+      return;
+    }
+    const liste = Array.isArray(veri) ? veri : [];
     renderDavetler(liste);
   } catch(e) {
     document.getElementById('davet-liste').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>';
