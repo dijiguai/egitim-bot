@@ -91,22 +91,77 @@ def kacinci_deneme(user_id: int) -> int:
 
 # ── EGITIM SIRASI ──────────────────────────────────────────
 
+def _sheets_index_oku() -> dict:
+    """Sheets'ten egitim_index ve son_tarih oku."""
+    try:
+        from sheets import _servis
+        s, sid = _servis()
+        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B10").execute()
+        satirlar = r.get("values", [])
+        ayarlar = {}
+        for satir in satirlar:
+            if len(satir) >= 2:
+                ayarlar[satir[0]] = satir[1]
+        return ayarlar
+    except:
+        return {}
+
+
+def _sheets_index_yaz(egitim_index: int, son_tarih: str):
+    """Sheets'e egitim_index ve son_tarih yaz."""
+    try:
+        from sheets import _servis
+        s, sid = _servis()
+        # Ayarlar sekmesi yoksa olustur
+        try:
+            s.values().get(spreadsheetId=sid, range="Ayarlar!A1").execute()
+        except:
+            s.batchUpdate(spreadsheetId=sid, body={
+                "requests": [{"addSheet": {"properties": {"title": "Ayarlar"}}}]
+            }).execute()
+        s.values().update(
+            spreadsheetId=sid, range="Ayarlar!A1:B2",
+            valueInputOption="RAW",
+            body={"values": [
+                ["egitim_index", str(egitim_index)],
+                ["son_tarih", son_tarih]
+            ]}
+        ).execute()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Sheets index yazma hatasi: {e}")
+
+
 def siradaki_egitim_al():
     from config import EGITIMLER
-    d = _oku()
     liste = list(EGITIMLER.keys())
     if not liste:
         return None, None
     bugun = _bugun()
-    if d.get("son_tarih") == bugun:
-        idx = (d.get("egitim_index", 1) - 1) % len(liste)
+
+    # Once Sheets'ten oku, yoksa durum.json'a bak
+    ayarlar = _sheets_index_oku()
+    son_tarih = ayarlar.get("son_tarih") or _oku().get("son_tarih", "")
+    egitim_index = int(ayarlar.get("egitim_index", _oku().get("egitim_index", 0)))
+
+    if son_tarih == bugun:
+        # Bugun zaten secildi - ayni egitimi dondur
+        idx = (egitim_index - 1) % len(liste)
         eid = liste[idx]
         return eid, EGITIMLER[eid]
-    idx = d.get("egitim_index", 0) % len(liste)
+
+    # Yeni gun - siradaki egitimi sec
+    idx = egitim_index % len(liste)
     eid = liste[idx]
-    d["egitim_index"] = (idx + 1) % len(liste)
+    yeni_index = (idx + 1) % len(liste)
+
+    # Hem Sheets'e hem durum.json'a yaz
+    _sheets_index_yaz(yeni_index, bugun)
+    d = _oku()
+    d["egitim_index"] = yeni_index
     d["son_tarih"] = bugun
     _yaz(d)
+
     return eid, EGITIMLER[eid]
 
 
@@ -121,10 +176,38 @@ def aktif_egitim_set(egitim_id: str, grup_mesaj_id: int = None):
         "acik": True
     }
     _yaz(d)
+    # Sheets'e de yaz (deploy kaliciligi icin)
+    try:
+        from sheets import _servis
+        s, sid = _servis()
+        s.values().update(
+            spreadsheetId=sid, range="Ayarlar!A3:B4",
+            valueInputOption="RAW",
+            body={"values": [
+                ["aktif_egitim_id", egitim_id],
+                ["aktif_egitim_tarih", _bugun()]
+            ]}
+        ).execute()
+    except:
+        pass
 
 
 def aktif_egitim_al() -> dict:
-    return _oku().get("aktif")
+    d = _oku()
+    aktif = d.get("aktif")
+    # durum.json bossa Sheets'ten oku
+    if not aktif or not aktif.get("egitim_id"):
+        try:
+            ayarlar = _sheets_index_oku()
+            eid = ayarlar.get("aktif_egitim_id")
+            tarih = ayarlar.get("aktif_egitim_tarih")
+            if eid and tarih:
+                aktif = {"egitim_id": eid, "tarih": tarih, "acik": tarih == _bugun()}
+                d["aktif"] = aktif
+                _yaz(d)
+        except:
+            pass
+    return aktif
 
 
 def aktif_egitim_temizle():
