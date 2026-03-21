@@ -609,13 +609,15 @@ async function ayarKaydet(anahtar, inputId) {
 
 async function davetAyarlariYukle() {
   try {
-    const r = await fetch('/panel/api/firma-grup-linki?firma_id=' + aktifFirma);
+    const firma = aktifFirma || 'varsayilan';
+    const r = await fetch('/panel/api/firma-grup-linki?firma_id=' + firma);
     const d = await r.json();
     const gl = document.getElementById('ayar-grup-link');
     const at = document.getElementById('ayar-admin-tel');
-    if(gl && d.link) gl.value = d.link;
-    if(at && d.admin_tel) at.value = d.admin_tel;
-  } catch(e) {}
+    if(gl) gl.value = d.link || '';
+    if(at) at.value = d.admin_tel || '';
+    console.log('Ayarlar yuklendi - link:', d.link, 'tel:', d.admin_tel);
+  } catch(e) { console.error('Ayarlar yuklenemedi:', e); }
 }
 document.getElementById('tarih-bas').value = bugun;
 document.getElementById('tarih-bitis').value = bugun;
