@@ -3087,22 +3087,32 @@ def api_davet_sil():
 
 @app.route("/panel/api/davet-ayarlari")
 def api_davet_ayarlari():
-    if not session.get("panel_giris"): return jsonify({}),401
+    if not session.get("panel_giris"): return jsonify({"giris":"yok"}),401
     try:
-        from sheets import _servis
-        s, sid = _servis()
+        import os
+        from google.oauth2.service_account import Credentials
+        from googleapiclient.discovery import build
+        creds = Credentials.from_service_account_file(
+            os.environ.get("GOOGLE_CREDENTIALS_PATH","credentials.json"),
+            scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        s = build("sheets","v4",credentials=creds).spreadsheets()
+        sid = os.environ.get("SPREADSHEET_ID")
         r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B20").execute()
         ayarlar = {}
         for satir in r.get("values",[]):
-            if len(satir) >= 2 and satir[0]:
-                ayarlar[satir[0].strip()] = satir[1].strip() if satir[1] else ""
+            if satir and len(satir) >= 2:
+                ayarlar[str(satir[0]).strip()] = str(satir[1]).strip()
+            elif satir and len(satir) == 1:
+                ayarlar[str(satir[0]).strip()] = ""
         from config import BOT_USERNAME
         return jsonify({
             "grup_link": ayarlar.get("grup_link",""),
             "admin_tel": ayarlar.get("admin_tel",""),
-            "bot_username": BOT_USERNAME
+            "bot_username": BOT_USERNAME,
+            "tum_ayarlar": ayarlar
         })
     except Exception as e:
+        logger.error(f"Davet ayarlari hatasi: {e}")
         return jsonify({"grup_link":"","admin_tel":"","hata":str(e)})
 
 
