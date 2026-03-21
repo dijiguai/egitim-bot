@@ -426,6 +426,49 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 </div>
 
+<div class="modal-overlay" id="toplu-islem-modal">
+  <div class="modal" style="max-width:520px;width:95vw">
+    <div class="modal-title">👥 Toplu İşlem</div>
+    <div class="modal-sub" id="toplu-egitim-adi"></div>
+    <input type="hidden" id="toplu-egitim-id">
+
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">KİMLER İÇİN</div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="toplu-calisan-liste">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="radio" name="toplu-kapsam" value="hepsi" checked> <strong>Tüm çalışanlar</strong>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="radio" name="toplu-kapsam" value="secili"> Belirli çalışanlar seç
+        </label>
+        <div id="toplu-calisan-secim" style="display:none;padding:10px;background:var(--bg);border-radius:8px;max-height:200px;overflow-y:auto;margin-top:4px">
+          Yükleniyor...
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">İŞLEM</div>
+      <div style="display:flex;gap:10px">
+        <label style="flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px;background:#e8f7f0;border:1px solid #c3e6cb;border-radius:8px">
+          <input type="radio" name="toplu-islem" value="tamamlandi" checked>
+          <div><div style="font-weight:700;color:var(--green)">✅ Tamamlandı</div><div style="font-size:11px;color:var(--muted)">Bu eğitimi geçmiş say</div></div>
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px;background:#fdecea;border:1px solid #f5bcb8;border-radius:8px">
+          <input type="radio" name="toplu-islem" value="sifirla">
+          <div><div style="font-weight:700;color:var(--red)">🔄 Sıfırla</div><div style="font-size:11px;color:var(--muted)">Tekrar alması gereksin</div></div>
+        </label>
+      </div>
+    </div>
+
+    <div id="toplu-hata" class="alert alert-red" style="display:none"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="topluIslemUygula()">Uygula</button>
+      <button class="btn btn-dark" onclick="modalKapat('toplu-islem-modal')">İptal</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="sil-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-title">Çalışanı Sil</div>
@@ -1112,6 +1155,7 @@ function renderEgitimler(egitimler) {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="egitimGonder('${e.id}', this)">▶️ Şimdi Gönder</button>
           <button class="btn btn-dark btn-sm" onclick="egitimDetayAl('${e.id}',this)">✏️ Düzenle</button>
+          <button class="btn btn-green btn-sm" onclick="topluIslemModalAc('${e.id}','${e.baslik}')">👥 Toplu</button>
           <button class="btn btn-red btn-sm" onclick="egitimSil('${e.id}','${e.baslik.replace(/'/g,"\'")}',this)">🗑 Sil</button>
         </div>
       </div>
@@ -1515,6 +1559,92 @@ async function ekstraHakVer(tid, ad, btn) {
     btn.textContent = '🔁 Tekrar İzni';
     btn.disabled = false;
   }
+}
+
+// ── TOPLU İŞLEM ──────────────────────────
+
+async function topluIslemModalAc(egitimId, egitimAdi) {
+  document.getElementById('toplu-egitim-id').value = egitimId;
+  document.getElementById('toplu-egitim-adi').textContent = egitimAdi;
+  document.getElementById('toplu-hata').style.display = 'none';
+  document.querySelector('input[name="toplu-kapsam"][value="hepsi"]').checked = true;
+  document.querySelector('input[name="toplu-islem"][value="tamamlandi"]').checked = true;
+  document.getElementById('toplu-calisan-secim').style.display = 'none';
+
+  // Calisan listesini yukle
+  try {
+    const r = await fetch(`/panel/api/calisanlar?firma_id=${aktifFirma}`);
+    const resp = await r.json();
+    const calisanlar = Array.isArray(resp) ? resp : resp.calisanlar;
+    document.getElementById('toplu-calisan-secim').innerHTML = calisanlar
+      .filter(c => c.telegram_id > 0)
+      .map(c => `
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0">
+          <input type="checkbox" name="toplu-calisan-cb" value="${c.telegram_id}"> 
+          ${c.ad_soyad} <span style="color:var(--muted);font-size:11px">${c.gorev}</span>
+        </label>`).join('');
+  } catch(e) {}
+
+  // Kapsam secimi degisince calisan listesini goster/gizle
+  document.querySelectorAll('input[name="toplu-kapsam"]').forEach(r => {
+    r.onchange = () => {
+      document.getElementById('toplu-calisan-secim').style.display =
+        r.value === 'secili' ? 'block' : 'none';
+    };
+  });
+
+  document.getElementById('toplu-islem-modal').classList.add('open');
+}
+
+async function topluIslemUygula() {
+  const egitimId = document.getElementById('toplu-egitim-id').value;
+  const islem = document.querySelector('input[name="toplu-islem"]:checked')?.value;
+  const kapsam = document.querySelector('input[name="toplu-kapsam"]:checked')?.value;
+  const hataEl = document.getElementById('toplu-hata');
+
+  let telegram_idler = [];
+  if(kapsam === 'secili') {
+    telegram_idler = Array.from(document.querySelectorAll('input[name="toplu-calisan-cb"]:checked'))
+      .map(cb => parseInt(cb.value));
+    if(!telegram_idler.length) {
+      hataEl.textContent = 'En az bir çalışan seçin.';
+      hataEl.style.display = 'block';
+      return;
+    }
+  }
+
+  const btn = document.querySelector('#toplu-islem-modal .btn-primary');
+  btn.textContent = '⏳ Uygulanıyor...';
+  btn.disabled = true;
+  hataEl.style.display = 'none';
+
+  try {
+    const r = await fetch('/panel/api/toplu-islem', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        egitim_id: egitimId,
+        islem: islem,
+        kapsam: kapsam,
+        telegram_idler: telegram_idler,
+        firma_id: aktifFirma
+      })
+    });
+    const d = await r.json();
+    if(d.basarili) {
+      modalKapat('toplu-islem-modal');
+      alert(`✅ İşlem tamamlandı: ${d.etkilenen} çalışan güncellendi.`);
+      calisanListesiYukle();
+    } else {
+      hataEl.textContent = 'Hata: ' + (d.hata || '');
+      hataEl.style.display = 'block';
+    }
+  } catch(e) {
+    hataEl.textContent = 'Bağlantı hatası';
+    hataEl.style.display = 'block';
+  }
+  btn.textContent = 'Uygula';
+  btn.disabled = false;
 }
 
 // ── EĞİTİM GÖNDER ────────────────────────
@@ -2429,6 +2559,66 @@ def api_firma_ekle():
             sayac += 1
         firma_ekle(firma_id, ad, grup_id)
         return jsonify({"basarili":True,"firma_id":firma_id})
+    except Exception as e:
+        return jsonify({"basarili":False,"hata":str(e)})
+
+
+@app.route("/panel/api/toplu-islem", methods=["POST"])
+def api_toplu_islem():
+    """Egitimi tum veya secili calisanlar icin tamamlandi/sifirla."""
+    if not session.get("panel_giris"): return jsonify({"basarili":False}), 401
+    veri = request.get_json()
+    egitim_id = veri.get("egitim_id","").strip()
+    islem = veri.get("islem","tamamlandi")  # 'tamamlandi' veya 'sifirla'
+    kapsam = veri.get("kapsam","hepsi")
+    telegram_idler = veri.get("telegram_idler",[])
+    firma_id = veri.get("firma_id","varsayilan")
+
+    if not egitim_id:
+        return jsonify({"basarili":False,"hata":"Egitim ID eksik"})
+
+    egitim = EGITIMLER.get(egitim_id)
+    if not egitim:
+        return jsonify({"basarili":False,"hata":"Egitim bulunamadi"})
+
+    # Calisan listesini al
+    calisanlar = tum_calisanlar(firma_id)
+    if kapsam == "secili" and telegram_idler:
+        hedef_idler = [tid for tid in calisanlar.keys() if tid in telegram_idler]
+    else:
+        hedef_idler = list(calisanlar.keys())
+
+    etkilenen = 0
+    try:
+        from durum import tamamlandi_kaydet, tekrar_izni_ver
+        from sheets import kayit_ekle
+        bugun = date.today().strftime("%d.%m.%Y")
+
+        for tid in hedef_idler:
+            c = calisanlar.get(tid, {})
+            if islem == "tamamlandi":
+                # Sheets'e gecti kaydı ekle
+                kayit_ekle({
+                    "tarih": bugun,
+                    "saat": "00:00",
+                    "ad_soyad": c.get("ad_soyad",""),
+                    "telegram_id": str(tid),
+                    "gorev": c.get("gorev",""),
+                    "egitim_konusu": egitim.get("baslik",egitim_id),
+                    "egitim_turu": egitim.get("tur",""),
+                    "puan": "100",
+                    "durum": "GECTI",
+                    "kimlik_dogrulandi": "TOPLU",
+                    "dogum_yili": c.get("dogum_tarihi","").split(".")[-1],
+                    "deneme_no": "1"
+                }, firma_id)
+                tamamlandi_kaydet(tid, egitim_id)
+            elif islem == "sifirla":
+                # durum.json'dan kaldir
+                tekrar_izni_ver(tid, egitim_id)
+            etkilenen += 1
+
+        return jsonify({"basarili":True,"etkilenen":etkilenen})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
 
