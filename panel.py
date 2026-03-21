@@ -1161,35 +1161,6 @@ async function davetListesiYukle() {
   }
 }
 
-function renderDavetler(liste) {
-  const el = document.getElementById('davet-liste');
-  if(!liste.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">📱</div><div>Henüz kimse eklenmemiş</div><button class="btn btn-primary" style="margin-top:16px" onclick="davetEkleModalAc()">+ İlk Kişiyi Ekle</button></div>';
-    return;
-  }
-  const renkler = {bekliyor:'var(--muted)',gonderildi:'var(--yellow)',katildi:'var(--green)'};
-  const etiket = {bekliyor:'⏳ Bekliyor',gonderildi:'📨 Gönderildi',katildi:'✅ Katıldı'};
-  let satirlar = '';
-  for(const d of liste) {
-    const durum_renk = renkler[d.durum] || 'var(--muted)';
-    const durum_etiket = etiket[d.durum] || d.durum;
-    const gonder_btn = d.durum !== 'katildi'
-      ? '<button class="btn btn-primary btn-sm" onclick="davetGonder(' + d.satir_no + ','' + d.ad_soyad + '','' + d.telefon + '','' + d.token + '',this)">' + (d.durum==='gonderildi'?'↩ Tekrar':'📨 Gönder') + '</button>'
-      : '';
-    satirlar += '<tr>'
-      + '<td><strong>' + d.ad_soyad + '</strong></td>'
-      + '<td style="font-family:monospace">' + d.telefon + '</td>'
-      + '<td><span style="color:' + durum_renk + ';font-weight:600">' + durum_etiket + '</span></td>'
-      + '<td style="color:var(--muted)">' + (d.davet_tarihi||'—') + '</td>'
-      + '<td style="color:var(--muted)">' + (d.katilma_tarihi||'—') + '</td>'
-      + '<td><div style="display:flex;gap:6px">' + gonder_btn
-      + '<button class="btn btn-red btn-sm" onclick="davetSil(' + d.satir_no + ',this)">🗑</button>'
-      + '</div></td></tr>';
-  }
-  el.innerHTML = '<div class="table-wrap"><table>'
-    + '<thead><tr><th>Ad Soyad</th><th>Telefon</th><th>Durum</th><th>Davet Tarihi</th><th>Katılma</th><th>İşlem</th></tr></thead>'
-    + '<tbody>' + satirlar + '</tbody></table></div>';
-}
 
 function davetEkleModalAc() {
   document.getElementById('dv-ad').value = '';
@@ -1226,24 +1197,15 @@ async function davetGonder(satirNo, adSoyad, telefon, token, btn) {
   const botUsername = grupD.bot_username || 'toolbox_egitim_bot';
 
   const mesaj = encodeURIComponent(
-    'Merhaba ' + adSoyad + ',
-
-' +
-    'Is basi egitim sistemine davet edildiniz.
-
-' +
-    'Katilmak icin:
-' +
-    '1. Telefonunuzda Telegram yuklu degilse once yukleyin:
-' +
-    '   https://telegram.org/dl
-
-' +
-    '2. Telegram yuklendikten sonra asagidaki baglantiya tiklayin:
-' +
-    '   ' + grupLink + '
-
-' +
+    'Merhaba ' + adSoyad + ',' + '\n' +
+    '\n' +
+    'Is basi egitim sistemine davet edildiniz.' + '\n' +
+    '\n' +
+    'Katilmak icin:' + '\n' +
+    '1. Telegram yuklu degilse once yukleyin: https://telegram.org/dl' + '\n' +
+    '\n' +
+    '2. Gruba katilmak icin tiklayin: ' + grupLink + '\n' +
+    '\n' +
     'Sorun yasarsaniz yoneticinizle iletisime gecin.'
   );
 
@@ -1710,7 +1672,7 @@ async function egitimGonderSecili(egitimId, tid, ad, btn) {
 
 async function egitimGonderCalisan(tid, ad, btn) {
   if(!tid || tid <= 0) { alert('Bu çalışanın Telegram hesabı bağlı değil.'); return; }
-  if(!confirm(`${ad} kişisine bugünkü eğitimi göndermek istediğinizden emin misiniz?`)) return;
+  if(!confirm(ad + ' kisine bugunku egitimi gondermek istediginizden emin misiniz?')) return;
   btn.textContent = '⏳';
   btn.disabled = true;
   try {
@@ -1806,7 +1768,7 @@ async function egitimDetayGoster(tid, ad, btn) {
 
 async function ekstraHakVer(tid, ad, btn) {
   if(!tid || tid <= 0) { alert('Bu çalışanın Telegram hesabı bağlı değil.'); return; }
-  if(!confirm(`${ad} kişisine bugün için tekrar eğitim izni vermek istiyor musunuz?`)) return;
+  if(!confirm(ad + ' kisine bugun icin tekrar egitim izni vermek istiyor musunuz?')) return;
   btn.textContent = '⏳';
   btn.disabled = true;
   try {
