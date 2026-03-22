@@ -16,6 +16,13 @@ SUTUNLAR = [
     "puan", "durum", "kimlik_dogrulandi", "dogum_yili", "deneme_no"
 ]
 
+def _normalize_durum(d: str) -> str:
+    """GEÇTİ / GECTİ / GECTI → GECTI; KALDI → KALDI"""
+    if not d:
+        return ""
+    d = d.upper().strip()
+    d = d.replace("Ç","C").replace("İ","I").replace("Ğ","G").replace("Ş","S").replace("Ü","U").replace("Ö","O")
+    return d
 
 def _servis():
     creds_path = os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials.json")
@@ -24,9 +31,7 @@ def _servis():
     service = build("sheets", "v4", credentials=creds).spreadsheets()
     return service, spreadsheet_id
 
-
 def _kayitlar_sekme(firma_id: str = None) -> str:
-    """Firma ID'sine gore kayitlar sekme adini dondur."""
     if not firma_id or firma_id == "varsayilan":
         return "Sayfa1"
     try:
@@ -35,7 +40,6 @@ def _kayitlar_sekme(firma_id: str = None) -> str:
         return f.get("kayitlar_sekme", f"Kayitlar_{firma_id}")
     except:
         return "Sayfa1"
-
 
 def kayit_ekle(kayit: dict, firma_id: str = None):
     sekme = _kayitlar_sekme(firma_id)
@@ -48,7 +52,6 @@ def kayit_ekle(kayit: dict, firma_id: str = None):
         insertDataOption="INSERT_ROWS",
         body={"values": [satir]}
     ).execute()
-
 
 def tum_kayitlar_getir(firma_id: str = None) -> list:
     sekme = _kayitlar_sekme(firma_id)
@@ -63,12 +66,13 @@ def tum_kayitlar_getir(firma_id: str = None) -> list:
         for satir in satirlar:
             if len(satir) < len(SUTUNLAR):
                 satir.extend([""] * (len(SUTUNLAR) - len(satir)))
-            kayitlar.append(dict(zip(SUTUNLAR, satir)))
+            k = dict(zip(SUTUNLAR, satir))
+            k["durum"] = _normalize_durum(k.get("durum", ""))
+            kayitlar.append(k)
         return kayitlar
     except Exception as e:
         logger.error(f"Sheets okuma hatasi ({sekme}): {e}")
         return []
-
 
 def kayitlari_getir(bas: str = "", bitis: str = "", firma_id: str = None) -> list:
     return [
