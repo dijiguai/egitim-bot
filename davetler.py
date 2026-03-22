@@ -16,11 +16,24 @@ DURUM_GONDERILDI = "gonderildi"
 DURUM_KATILDI = "katildi"
 
 
+def _get_credentials():
+    creds_json = __import__('os').environ.get("GOOGLE_CREDENTIALS_JSON")
+    if creds_json:
+        try:
+            import json as _json
+            info = _json.loads(creds_json)
+            return Credentials.from_service_account_info(info, scopes=SCOPES)
+        except Exception as e:
+            pass
+    creds_path = __import__('os').environ.get("GOOGLE_CREDENTIALS_PATH", "credentials.json")
+    if __import__('os').path.exists(creds_path):
+        return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+    raise ValueError("Google credentials bulunamadi!")
+
 def _servis():
-    creds = Credentials.from_service_account_file(
-        os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials.json"), scopes=SCOPES)
+    creds = _get_credentials()
     s = build("sheets", "v4", credentials=creds).spreadsheets()
-    sid = os.environ.get("SPREADSHEET_ID")
+    sid = __import__('os').environ.get("SPREADSHEET_ID")
     return s, sid
 
 
