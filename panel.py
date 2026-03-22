@@ -3111,14 +3111,8 @@ def api_davet_ayarlari():
     if not session.get("panel_giris"): return jsonify({"giris":"yok"}),401
     firma_id = request.args.get("firma_id","varsayilan")
     try:
-        import os
-        from google.oauth2.service_account import Credentials
-        from googleapiclient.discovery import build
-        creds = Credentials.from_service_account_file(
-            os.environ.get("GOOGLE_CREDENTIALS_PATH","credentials.json"),
-            scopes=["https://www.googleapis.com/auth/spreadsheets"])
-        s = build("sheets","v4",credentials=creds).spreadsheets()
-        sid = os.environ.get("SPREADSHEET_ID")
+        from sheets import _servis
+        s, sid = _servis()
         r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B30").execute()
         ayarlar = {}
         for satir in r.get("values",[]):
