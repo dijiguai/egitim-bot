@@ -19,9 +19,22 @@ def _to_int(val):
     except: return None
 
 
+def _get_credentials():
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if creds_json:
+        try:
+            import json as _json
+            info = _json.loads(creds_json)
+            return Credentials.from_service_account_info(info, scopes=SCOPES)
+        except Exception as e:
+            logger.error(f"GOOGLE_CREDENTIALS_JSON parse hatasi: {e}")
+    creds_path = os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials.json")
+    if os.path.exists(creds_path):
+        return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+    raise ValueError("Google credentials bulunamadi!")
+
 def _servis():
-    creds = Credentials.from_service_account_file(
-        os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials.json"), scopes=SCOPES)
+    creds = _get_credentials()
     s = build("sheets", "v4", credentials=creds).spreadsheets()
     sid = os.environ.get("SPREADSHEET_ID")
     return s, sid
