@@ -2,7 +2,7 @@
 Egitim kayitlari - firma bazli Google Sheets okuma/yazma
 """
 
-import logging, os
+import logging, os, json, tempfile
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from datetime import datetime
@@ -17,17 +17,36 @@ SUTUNLAR = [
 ]
 
 def _normalize_durum(d: str) -> str:
-    """GEÇTİ / GECTİ / GECTI → GECTI; KALDI → KALDI"""
     if not d:
         return ""
     d = d.upper().strip()
     d = d.replace("Ç","C").replace("İ","I").replace("Ğ","G").replace("Ş","S").replace("Ü","U").replace("Ö","O")
     return d
 
-def _servis():
+def _get_credentials():
+    """
+    Credentials'i once GOOGLE_CREDENTIALS_JSON env variable'dan oku,
+    yoksa GOOGLE_CREDENTIALS_PATH'teki dosyadan oku.
+    """
+    # 1. Environment variable olarak JSON string
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if creds_json:
+        try:
+            info = json.loads(creds_json)
+            return Credentials.from_service_account_info(info, scopes=SCOPES)
+        except Exception as e:
+            logger.error(f"GOOGLE_CREDENTIALS_JSON parse hatasi: {e}")
+
+    # 2. Dosya yolu
     creds_path = os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials.json")
+    if os.path.exists(creds_path):
+        return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+
+    raise ValueError("Google credentials bulunamadi! GOOGLE_CREDENTIALS_JSON veya GOOGLE_CREDENTIALS_PATH gerekli.")
+
+def _servis():
+    creds = _get_credentials()
     spreadsheet_id = os.environ.get("SPREADSHEET_ID")
-    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
     service = build("sheets", "v4", credentials=creds).spreadsheets()
     return service, spreadsheet_id
 
