@@ -30,9 +30,33 @@ async def egitim_baslat(app):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
     simdi = simdi_tr()
-    gun = simdi.weekday()
-    if gun == 6:
-        logger.info("Pazar - egitim yok.")
+    gun = simdi.weekday()  # 0=Pzt, 6=Paz
+
+    # Firma bazli egitim gunlerini kontrol et
+    def egitim_gunu_mu(firma_id, gun_no):
+        try:
+            import os
+            from google.oauth2.service_account import Credentials
+            from googleapiclient.discovery import build
+            creds = Credentials.from_service_account_file(
+                os.environ.get("GOOGLE_CREDENTIALS_PATH","credentials.json"),
+                scopes=["https://www.googleapis.com/auth/spreadsheets"])
+            s = build("sheets","v4",credentials=creds).spreadsheets()
+            sid = os.environ.get("SPREADSHEET_ID")
+            r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B30").execute()
+            for satir in r.get("values",[]):
+                if satir and satir[0].strip() == f"egitim_gunleri_{firma_id}":
+                    gunler = [int(g.strip()) for g in satir[1].split(",") if g.strip().isdigit()]
+                    return gun_no in gunler
+        except Exception as e:
+            logger.warning(f"Egitim gun kontrolu hatasi: {e}")
+        # Varsayilan: Pazar haric her gun
+        return gun_no != 6
+
+    # Varsayilan firma icin gun kontrolu
+    from config import GRUP_ID as DEFAULT_GRUP_ID
+    if not egitim_gunu_mu("varsayilan", gun):
+        logger.info(f"Bugun ({gun}) egitim gunu degil (varsayilan firma).")
         return
 
     egitim_id, egitim = siradaki_egitim_al()
@@ -102,10 +126,25 @@ async def egitim_kapat(app):
 
     bugun = date.today().strftime("%d.%m.%Y")
 
+    # Aktif egitimin basligini al
+    aktif = aktif_egitim_al()
+    aktif_egitim_id = aktif.get("egitim_id") if aktif else None
+
     # Sheets'ten bugunun kayitlarini cek
     try:
+        from config import EGITIMLER
         tum_kayitlar = tum_kayitlar_getir()
-        bugun_kayitlar = [k for k in tum_kayitlar if k.get("tarih") == bugun]
+        # Sadece bugunun kayitlari VE aktif egitimin kayitlari
+        if aktif_egitim_id and aktif_egitim_id in EGITIMLER:
+            aktif_baslik = EGITIMLER[aktif_egitim_id].get("baslik", "")
+            bugun_kayitlar = [k for k in tum_kayitlar
+                if k.get("tarih") == bugun
+                and k.get("egitim_konusu","") == aktif_baslik
+                and k.get("kimlik_dogrulandi","") != "TOPLU"]
+        else:
+            bugun_kayitlar = [k for k in tum_kayitlar
+                if k.get("tarih") == bugun
+                and k.get("kimlik_dogrulandi","") != "TOPLU"]
     except Exception as e:
         logger.error(f"Kayit okuma hatasi: {e}")
         bugun_kayitlar = []
