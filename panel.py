@@ -1325,7 +1325,7 @@ async function davetGonder(satirNo, adSoyad, telefon, token, btn) {
   // Grup davet linkini al
   const grupR = await fetch(`/panel/api/firma-grup-linki?firma_id=${aktifFirma}`);
   const grupD = await grupR.json();
-  const grupLink = grupD.grup_link || 'https://t.me/+GRUP_DAVET_LINKI';
+  const grupLink = grupD.grup_link || grupD.link || 'https://t.me/+GRUP_DAVET_LINKI';
   const botUsername = grupD.bot_username || 'toolbox_egitim_bot';
 
   const mesaj = encodeURIComponent(
@@ -3147,7 +3147,7 @@ def api_firma_grup_linki():
         link = ayarlar.get(f"grup_link_{firma_id}") or ayarlar.get("grup_link") or ""
         admin_tel = ayarlar.get("admin_tel") or ""
         from config import BOT_USERNAME
-        return jsonify({"link": link, "grup_id": grup_id, "bot_username": BOT_USERNAME, "admin_tel": admin_tel})
+        return jsonify({"link": link, "grup_link": link, "grup_id": grup_id, "bot_username": BOT_USERNAME, "admin_tel": admin_tel})
     except Exception as e:
         from config import BOT_USERNAME
         return jsonify({"link":"","bot_username":BOT_USERNAME,"admin_tel":""})
