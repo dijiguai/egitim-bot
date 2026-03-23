@@ -57,19 +57,18 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def _kayit_baslat(update, context, user_id):
-    """Kendi kendine kayit akisini baslat."""
+    """Kendi kendine kayit akisini baslat - sadece ad sor."""
     kullanici_durum[user_id] = {
         "kayit_akisi": True,
         "adim": "ad_soyad",
         "ad_soyad": "",
-        "dogum_tarihi": "",
-        "gorev": "",
+        "dogum_tarihi": "00.00.0000",
+        "gorev": "Belirsiz",
     }
     await context.bot.send_message(
         chat_id=user_id,
         text=(
-            "Hos geldiniz! Kayit olmak icin birkaç adim var.\n\n"
-            "Adim 1/3\n"
+            "Hos geldiniz! 👋\n\n"
             "Ad ve soyadinizi girin:\n"
             "(Ornek: Ahmet Yilmaz)"
         )
@@ -114,36 +113,6 @@ async def _kayit_adim_isle(update, context, user_id, durum):
             await update.message.reply_text("Lutfen gercek ad soyadinizi girin (en az 3 karakter):")
             return
         durum["ad_soyad"] = metin
-        durum["adim"] = "dogum_tarihi"
-        kullanici_durum[user_id] = durum
-        await update.message.reply_text(
-            f"Adim 2/3\n"
-            f"Dogum tarihinizi girin:\n"
-            f"Format: GG.AA.YYYY\n"
-            f"Ornek: 15.06.1990"
-        )
-
-    elif adim == "dogum_tarihi":
-        if not re.match(r"^\d{2}\.\d{2}\.\d{4}$", metin):
-            await update.message.reply_text(
-                "Gecersiz format. Lutfen GG.AA.YYYY seklinde girin:\n"
-                "Ornek: 15.06.1990"
-            )
-            return
-        durum["dogum_tarihi"] = metin
-        durum["adim"] = "gorev"
-        kullanici_durum[user_id] = durum
-        await update.message.reply_text(
-            "Adim 3/3\n"
-            "Gorev veya unvaninizi girin:\n"
-            "(Ornek: Forklift Operatoru, Teknisyen, Muhasebe vb.)"
-        )
-
-    elif adim == "gorev":
-        if len(metin) < 2:
-            await update.message.reply_text("Lutfen gorev/unvaninizi girin:")
-            return
-        durum["gorev"] = metin
         durum["adim"] = "onay"
         kullanici_durum[user_id] = durum
 
@@ -152,11 +121,9 @@ async def _kayit_adim_isle(update, context, user_id, durum):
             InlineKeyboardButton("Iptal", callback_data=f"kayit_iptal:{user_id}")
         ]]
         await update.message.reply_text(
-            f"Bilgilerinizi kontrol edin:\n\n"
-            f"Ad Soyad: {durum['ad_soyad']}\n"
-            f"Dogum Tarihi: {durum['dogum_tarihi']}\n"
-            f"Gorev: {durum['gorev']}\n\n"
-            f"Kaydetmek istiyor musunuz?",
+            f"Adiniz: *{metin}*\n\n"
+            f"Kaydedelim mi? Yoneticiniz gorevi ve dogum tarihinizi tamamlayacak.",
+            parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
