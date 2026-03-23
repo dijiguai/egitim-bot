@@ -2069,7 +2069,54 @@ async function egitimUret() {
 // Sayfa yuklenince calistir
 window.onload = function() {
   try {
-    const kaydedilen = sessionStorage.getItem('aktifFirma');
+    // URL'den gelen calisan ekleme parametrelerini isle
+  const urlParams = new URLSearchParams(window.location.search);
+  const acikTid = urlParams.get('acik_tid');
+  const acikAd = urlParams.get('acik_ad');
+  if (acikTid) {
+    // Firmalar sayfasindaysak, varsayilan firmaya git
+    setTimeout(() => {
+      if (!aktifFirma || aktifFirma === 'null') {
+        // Ilk firmaya git
+        const ilkFirma = document.querySelector('[onclick*="firmaAc"]');
+        if (ilkFirma) ilkFirma.click();
+        setTimeout(() => _acikCalisanModal(acikTid, acikAd), 800);
+      } else {
+        _acikCalisanModal(acikTid, acikAd);
+      }
+    }, 500);
+  }
+
+  function _acikCalisanModal(tid, ad) {
+    // Calisanlar sekmesine gec
+    const calisanTab = document.querySelector('.tab[onclick*="calisanlar"]') ||
+                       Array.from(document.querySelectorAll('.tab')).find(t => t.textContent.includes('Calisan'));
+    if (calisanTab) calisanTab.click();
+    // Modal ac ve doldur
+    setTimeout(() => {
+      document.getElementById('c-tid').value = tid;
+      document.getElementById('c-ad').value = decodeURIComponent(ad || '');
+      document.getElementById('c-gorev').value = '';
+      document.getElementById('c-dogum').value = '';
+      document.getElementById('calisan-hata').style.display = 'none';
+      modalAc('calisan-modal');
+      // Zaten kayitli mi kontrol et
+      if (tid && parseInt(tid) > 0) {
+        fetch('/panel/api/calisanlar?firma_id=' + (aktifFirma||'varsayilan'))
+          .then(r => r.json())
+          .then(d => {
+            const mevcut = (d.calisanlar||[]).find(c => String(c.telegram_id) === String(tid));
+            if (mevcut) {
+              document.getElementById('calisan-hata').textContent =
+                mevcut.ad_soyad + ' zaten sistemde kayitli!';
+              document.getElementById('calisan-hata').style.display = 'block';
+            }
+          }).catch(()=>{});
+      }
+    }, 600);
+  }
+
+  const kaydedilen = sessionStorage.getItem('aktifFirma');
     const kaydedilenAdi = sessionStorage.getItem('aktifFirmaAdi');
     if(kaydedilen && kaydedilenAdi) {
       firmaAc(kaydedilen, kaydedilenAdi);
@@ -2092,6 +2139,11 @@ def panel():
 def login():
     if request.form.get("sifre","") == PANEL_SIFRE:
         session["panel_giris"] = True
+        # Telegram'dan gelen bekleyen calisan ekleme varsa
+        tid = session.pop("bekleyen_tid", "")
+        ad = session.pop("bekleyen_ad", "")
+        if tid:
+            return redirect(f"/panel?acik_tid={tid}&acik_ad={ad}")
         return redirect("/panel")
     return render_template_string(HTML, logged_in=False, hata=True)
 
@@ -3187,6 +3239,27 @@ def api_ayar_kaydet():
         return jsonify({"basarili":True})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
+
+
+
+@app.route("/panel/ekle-calisan")
+def ekle_calisan_redirect():
+    """
+    Telegram'dan gelen 'Sisteme Ekle' butonu buraya yonlendirir.
+    Kullanici panele login degilse login sayfasina, 
+    login ise panel'e tid ve ad parametreleriyle yonlendirir.
+    """
+    if not session.get("panel_giris"):
+        tid = request.args.get("tid", "")
+        ad = request.args.get("ad", "")
+        # Login sonrasi geri donmek icin parametreleri session'a kaydet
+        session["bekleyen_tid"] = tid
+        session["bekleyen_ad"] = ad
+        return redirect("/panel")
+    tid = request.args.get("tid", "")
+    ad = request.args.get("ad", "")
+    # Panele yonlendir, JS parametreleri okuyacak
+    return redirect(f"/panel?acik_tid={tid}&acik_ad={ad}")
 
 
 if __name__ == "__main__":
