@@ -266,14 +266,13 @@ async def yeni_uye_ekle_callback(update: Update, context: ContextTypes.DEFAULT_T
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     keyboard = [[InlineKeyboardButton("Panelde Ekle", url=panel_link)]]
 
+    metin = (
+        f"*{ad}* ({username}) sisteme eklemek icin paneli acin:\n\n"
+        f"ID: `{user_id}`\n\n"
+        f"Asagidaki butona basin, form otomatik dolacak."
+    )
     await query.edit_message_text(
-        f"*{ad}* ({username}) sisteme eklemek icin paneli acin:
-
-"
-        f"ID: `{user_id}`
-
-"
-        f"Asagidaki butona basin, form otomatik dolacak.",
+        metin,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
