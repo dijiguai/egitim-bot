@@ -255,11 +255,27 @@ async def yeni_uye_ekle_callback(update: Update, context: ContextTypes.DEFAULT_T
     user_id = int(query.data.split(":")[1])
     bilgi = yeni_uyeler.get(user_id, {})
     ad = bilgi.get("ad", f"Kullanici {user_id}")
+    username = bilgi.get("username", "")
+
+    # Panel URL'ini env'den al, yoksa Railway default
+    import os, urllib.parse
+    panel_base = os.environ.get("PANEL_URL", "https://egitim-bot-production.up.railway.app")
+    ad_encoded = urllib.parse.quote(ad)
+    panel_link = f"{panel_base}/panel/ekle-calisan?tid={user_id}&ad={ad_encoded}"
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("Panelde Ekle", url=panel_link)]]
+
     await query.edit_message_text(
-        f"{ad} sisteme eklemek icin:\n\n"
-        f"/hizli_ekle {user_id} [Gorev] [GG.AA.YYYY]\n\n"
-        f"Ornek:\n"
-        f"/hizli_ekle {user_id} Operator 15.06.1990"
+        f"*{ad}* ({username}) sisteme eklemek icin paneli acin:
+
+"
+        f"ID: `{user_id}`
+
+"
+        f"Asagidaki butona basin, form otomatik dolacak.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
