@@ -26,8 +26,13 @@ async def egitim_baslat(app):
     """08:00 - egitimi baslat."""
     from config import GRUP_ID
     from calisanlar import tum_calisanlar
-    from durum import siradaki_egitim_al, izinli_mi, aktif_egitim_set
+    from durum import siradaki_egitim_al, izinli_mi, aktif_egitim_set, egitim_acik_mi
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    # Deploy sonrasi tekrar gonderimi onle: bugun zaten gonderildiyse cik
+    if egitim_acik_mi():
+        logger.info("Bugun zaten egitim gonderilmis, tekrar gonderilmiyor.")
+        return
 
     simdi = simdi_tr()
     gun = simdi.weekday()  # 0=Pzt, 6=Paz
@@ -35,14 +40,8 @@ async def egitim_baslat(app):
     # Firma bazli egitim gunlerini kontrol et
     def egitim_gunu_mu(firma_id, gun_no):
         try:
-            import os
-            from google.oauth2.service_account import Credentials
-            from googleapiclient.discovery import build
-            creds = Credentials.from_service_account_file(
-                os.environ.get("GOOGLE_CREDENTIALS_PATH","credentials.json"),
-                scopes=["https://www.googleapis.com/auth/spreadsheets"])
-            s = build("sheets","v4",credentials=creds).spreadsheets()
-            sid = os.environ.get("SPREADSHEET_ID")
+            from sheets import _servis
+            s, sid = _servis()
             r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B30").execute()
             for satir in r.get("values",[]):
                 if satir and satir[0].strip() == f"egitim_gunleri_{firma_id}":
