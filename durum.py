@@ -218,18 +218,55 @@ def aktif_egitim_temizle():
 
 
 def egitim_acik_mi() -> bool:
+    """
+    Bugun egitim acik mi? durum.json bossa Sheets'ten kontrol et.
+    Deploy sonrasi tekrar egitim gonderilmesini onler.
+    """
+    bugun = _bugun()
     d = _oku()
     aktif = d.get("aktif")
-    if not aktif:
-        return False
-    return aktif.get("acik", False) and aktif.get("tarih") == _bugun()
+    if aktif and aktif.get("tarih") == bugun:
+        return aktif.get("acik", False)
+    # json bos - Sheets'ten bak
+    try:
+        ayarlar = _sheets_index_oku()
+        eid = ayarlar.get("aktif_egitim_id")
+        tarih = ayarlar.get("aktif_egitim_tarih")
+        if eid and tarih == bugun:
+            # Bugun zaten egitim gonderilmis, acik say
+            d["aktif"] = {"egitim_id": eid, "tarih": tarih, "acik": True}
+            _yaz(d)
+            return True
+    except:
+        pass
+    return False
 
 
 def gunun_egitim_id() -> str:
+    """
+    Bugunun aktif egitim ID'sini dondur.
+    Once durum.json'a bak, bossa Sheets'ten oku.
+    Deploy sonrasi json sifirlaninca Sheets'ten geri yukler.
+    """
+    bugun = _bugun()
+    # 1. durum.json'a bak
     d = _oku()
     aktif = d.get("aktif")
-    if aktif and aktif.get("tarih") == _bugun():
+    if aktif and aktif.get("tarih") == bugun and aktif.get("egitim_id"):
         return aktif.get("egitim_id")
+    # 2. Sheets'ten oku (deploy sonrasi json silinmis olabilir)
+    try:
+        ayarlar = _sheets_index_oku()
+        eid = ayarlar.get("aktif_egitim_id")
+        tarih = ayarlar.get("aktif_egitim_tarih")
+        if eid and tarih == bugun:
+            # json'a geri yaz
+            d["aktif"] = {"egitim_id": eid, "tarih": tarih, "acik": True}
+            _yaz(d)
+            logger.info(f"Aktif egitim Sheets'ten yuklendi: {eid}")
+            return eid
+    except Exception as e:
+        logger.warning(f"Sheets'ten egitim id okunamadi: {e}")
     return None
 
 
