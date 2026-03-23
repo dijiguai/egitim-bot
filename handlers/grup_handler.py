@@ -90,23 +90,25 @@ async def yeni_uye_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.warning(f"Davet eslestirme hatasi: {e}")
 
-        # Davet bulunamadiysa bot linki gonder
+        # Davet bulunamadiysa grup icinde kayit butonu goster
+        # (ozel mesaj gonderilemez - kisi bota hic yazmamis olabilir)
         if not davet_bulundu:
             try:
                 from config import BOT_USERNAME
                 bot_link = f"https://t.me/{BOT_USERNAME}?start=kayit"
+                mention = f"@{username.lstrip('@')}" if username else ad
                 await context.bot.send_message(
-                    chat_id=user_id,
+                    chat_id=update.effective_chat.id,
                     text=(
-                        f"Merhaba {ad}!\n\n"
-                        f"Egitim sistemine kayit olmak icin asagidaki butona basin:"
+                        f"Hosgeldin {mention}! 👋\n\n"
+                        f"Egitim sistemine kayit olmak icin asagidaki butona bas."
                     ),
                     reply_markup=InlineKeyboardMarkup([[
                         InlineKeyboardButton("Sisteme Kayit Ol", url=bot_link)
                     ]])
                 )
             except Exception as e:
-                logger.warning(f"Bot linki gonderilemedi: {e}")
+                logger.warning(f"Grup kayit mesaji gonderilemedi: {e}")
 
         keyboard = [[
             InlineKeyboardButton("Sisteme Ekle", callback_data=f"yeni_uye_ekle:{user_id}"),
