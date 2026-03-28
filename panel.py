@@ -271,18 +271,33 @@ textarea.form-input{min-height:80px;resize:vertical}
     <div style="max-width:520px;margin:32px auto 0">
       <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:16px">
         <div style="font-family:Syne,sans-serif;font-weight:700;font-size:17px;margin-bottom:6px">🚀 Toplu Eğitim Gönder</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6">Bugünün eğitimini tüm aktif çalışanlara şimdi gönder.<br>Bot çökmesi veya gecikmesi durumunda kullan.</div>
-        <div style="background:#fff8e6;border:1px solid #f5d87a;border-radius:10px;padding:12px 16px;font-size:13px;color:#856404;margin-bottom:20px">⚠️ Sabah otomatik gönderim zaten gittiyse çalışanlar <strong>ikinci kez</strong> mesaj alır. Sadece gönderim gitmediyse kullan.</div>
-        <div style="margin-bottom:16px">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6">Seçtiğin eğitimi tüm aktif çalışanlara anında gönder.<br>Bot çökmesi veya gecikmesi durumunda kullan.</div>
+        <div style="background:#fff8e6;border:1px solid #f5d87a;border-radius:10px;padding:12px 16px;font-size:13px;color:#856404;margin-bottom:20px">⚠️ Gönderim zaten gittiyse çalışanlar <strong>ikinci kez</strong> mesaj alır. Sadece gönderim gitmediyse kullan.</div>
+        <div style="margin-bottom:14px">
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Firma</div>
-          <select id="toplu-firma-sec" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);outline:none"><option value="">Yükleniyor...</option></select>
+          <select id="toplu-firma-sec" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);outline:none" onchange="topluEgitimListesiYukle()"><option value="">Yükleniyor...</option></select>
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Gönderilecek Eğitim</div>
+          <select id="toplu-egitim-sec" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);outline:none"><option value="">Önce firma seçin...</option></select>
+        </div>
+        <div style="margin-bottom:20px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Kimler alacak?</div>
+          <div style="display:flex;gap:8px">
+            <label style="flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px">
+              <input type="radio" name="toplu-kime" value="hepsi" checked> Tüm çalışanlar
+            </label>
+            <label style="flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px">
+              <input type="radio" name="toplu-kime" value="eksikler"> Eğitimi olmayanlar
+            </label>
+          </div>
         </div>
         <div id="toplu-egitim-sonuc" style="display:none;padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:16px"></div>
-        <button class="btn btn-primary" style="width:100%;padding:14px;font-size:14px" onclick="topluEgitimGonder(this)">🚀 Tüm Çalışanlara Şimdi Gönder</button>
+        <button class="btn btn-primary" style="width:100%;padding:14px;font-size:14px" onclick="topluEgitimGonder(this)">🚀 Seçilen Eğitimi Şimdi Gönder</button>
       </div>
       <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px">
         <div style="font-family:Syne,sans-serif;font-weight:700;font-size:14px;margin-bottom:10px">ℹ️ Ne zaman kullanılır?</div>
-        <div style="font-size:13px;color:var(--muted);line-height:1.9">• Bot sabah 08:00\'de çökmüşse ve eğitim gitmediyse<br>• Sunucu yeniden başlatması sonrası telafi için<br>• Yeni eklenen çalışanın aynı gün eğitim alması gerekiyorsa</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.9">• Bot sabah 08:00\'de çökmüşse ve eğitim gitmediyse<br>• Sunucu yeniden başlatması sonrası telafi için<br>• Belirli bir eğitimi tekrar göndermek istediğinde</div>
       </div>
     </div>
   </div>
@@ -1541,7 +1556,7 @@ function renderEgitimler(egitimler) {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="egitimGonder('${e.id}', this)">▶️ Şimdi Gönder</button>
           <button class="btn btn-dark btn-sm" onclick="egitimDetayAl('${e.id}',this)">✏️ Düzenle</button>
-          <button class="btn btn-green btn-sm" onclick="topluIslemModalAc('${e.id}','${e.baslik}')">👥 Toplu</button>
+          <button class="btn btn-green btn-sm" onclick="topluEgitimSekmesineGec('${e.id}')">🚀 Toplu Gönder</button>
           <button class="btn btn-red btn-sm" onclick="egitimSil('${e.id}','${e.baslik.replace(/'/g,"\'")}',this)">🗑 Sil</button>
         </div>
       </div>
@@ -2157,14 +2172,57 @@ async function topluEgitimFirmalariYukle() {
     sel.innerHTML = firmalar.length
       ? firmalar.map(f => `<option value="${f.firma_id}">${f.ad}</option>`).join('')
       : '<option value="varsayilan">Varsayılan Firma</option>';
+    topluEgitimListesiYukle();
   } catch(e) {
     sel.innerHTML = '<option value="varsayilan">Varsayılan Firma</option>';
+    topluEgitimListesiYukle();
   }
+}
+
+async function topluEgitimListesiYukle() {
+  const sel = document.getElementById('toplu-egitim-sec');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Yükleniyor...</option>';
+  try {
+    const r = await fetch('/panel/api/egitimler');
+    const d = await r.json();
+    const egitimler = d.egitimler || [];
+    sel.innerHTML = '<option value="bugun">📅 Bugünün sıradaki eğitimi (otomatik)</option>' +
+      egitimler.map(e => `<option value="${e.id}">${e.baslik}</option>`).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="bugun">Bugünün sıradaki eğitimi</option>';
+  }
+}
+
+function topluEgitimSekmesineGec(egitimId) {
+  // Eğitimler sekmesindeki 🚀 Toplu Gönder butonuna basınca buraya gelir
+  const tab = document.querySelector('.tab[onclick*="toplu-egitim"]');
+  if (tab) tab.click();
+  // Kısa gecikme ile eğitimi seç (dropdown yüklendikten sonra)
+  setTimeout(() => {
+    const sel = document.getElementById('toplu-egitim-sec');
+    if (sel && egitimId) {
+      sel.value = egitimId;
+      // Bulamazsa (henüz yüklenmediyse) tekrar dene
+      if (!sel.value || sel.value !== egitimId) {
+        setTimeout(() => { if(sel) sel.value = egitimId; }, 800);
+      }
+    }
+  }, 400);
 }
 
 async function topluEgitimGonder(btn) {
   const sonuc = document.getElementById('toplu-egitim-sonuc');
   const firmaId = document.getElementById('toplu-firma-sec')?.value || 'varsayilan';
+  const egitimId = document.getElementById('toplu-egitim-sec')?.value || 'bugun';
+  const kime = document.querySelector('input[name="toplu-kime"]:checked')?.value || 'hepsi';
+
+  if (!egitimId) {
+    sonuc.style.cssText = 'display:block;background:#fdecea;border:1px solid #f5bcb8;color:var(--red)';
+    sonuc.innerHTML = '❌ Lütfen bir eğitim seçin.';
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = '⏳ Gönderiliyor...';
   sonuc.style.display = 'none';
@@ -2172,7 +2230,7 @@ async function topluEgitimGonder(btn) {
     const r = await fetch('/panel/api/toplu-egitim-gonder', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({firma_id: firmaId})
+      body: JSON.stringify({firma_id: firmaId, egitim_id: egitimId, kime: kime})
     });
     const d = await r.json();
     if (d.basarili) {
@@ -2187,7 +2245,7 @@ async function topluEgitimGonder(btn) {
     sonuc.innerHTML = '❌ Bağlantı hatası: ' + e.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = '🚀 Tüm Çalışanlara Şimdi Gönder';
+    btn.textContent = '🚀 Seçilen Eğitimi Şimdi Gönder';
   }
 }
 
@@ -3311,17 +3369,19 @@ def api_ayar_kaydet():
 
 @app.route("/panel/api/toplu-egitim-gonder", methods=["POST"])
 def api_toplu_egitim_gonder():
-    """Bugünün eğitimini tüm çalışanlara şimdi gönder (panel üzerinden acil gönderim)."""
+    """Seçilen eğitimi tüm/belirli çalışanlara şimdi gönder."""
     if not session.get("panel_giris"):
         return jsonify({"basarili": False, "hata": "Yetkisiz"}), 401
 
     from config import GRUP_ID
     from calisanlar import tum_calisanlar
-    from durum import siradaki_egitim_al, aktif_egitim_set, izinli_mi
+    from durum import siradaki_egitim_al, aktif_egitim_set, izinli_mi, tamamlanan_egitimler
     import requests as req_lib, time as t_lib
 
     veri = request.get_json() or {}
     firma_id = veri.get("firma_id", "varsayilan")
+    egitim_id_param = veri.get("egitim_id", "bugun")  # 'bugun' = sıradaki eğitim
+    kime = veri.get("kime", "hepsi")  # 'hepsi' veya 'eksikler'
 
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     if not token:
@@ -3330,9 +3390,15 @@ def api_toplu_egitim_gonder():
     base = f"https://api.telegram.org/bot{token}"
 
     try:
-        egitim_id, egitim = siradaki_egitim_al()
+        # Eğitimi belirle
+        if egitim_id_param == "bugun":
+            egitim_id, egitim = siradaki_egitim_al()
+        else:
+            egitim_id = egitim_id_param
+            egitim = EGITIMLER.get(egitim_id)
+
         if not egitim:
-            return jsonify({"basarili": False, "hata": "Aktif eğitim bulunamadı"})
+            return jsonify({"basarili": False, "hata": f"Eğitim bulunamadı: {egitim_id_param}"})
 
         aktif_egitim_set(egitim_id)
         keyboard = {"inline_keyboard": [[{"text": "▶️ Eğitime Başla", "callback_data": f"egitim_baslat:{egitim_id}"}]]}
@@ -3349,7 +3415,6 @@ def api_toplu_egitim_gonder():
             except Exception as e:
                 logger.warning(f"Grup mesajı gönderilemedi: {e}")
 
-        # Çalışanlara kişisel mesaj
         from datetime import date
         bugun = date.today().strftime("%d.%m.%Y")
         calisanlar = tum_calisanlar()
@@ -3362,11 +3427,20 @@ def api_toplu_egitim_gonder():
             if izinli_mi(uid, bugun):
                 atlanan += 1
                 continue
+            # 'eksikler' modunda: sadece bu eğitimi almamış olanlar
+            if kime == "eksikler":
+                try:
+                    tamamlananlar = tamamlanan_egitimler(uid)
+                    if egitim_id in tamamlananlar:
+                        atlanan += 1
+                        continue
+                except Exception:
+                    pass
             try:
                 ad = c.get("ad_soyad", "").split()[0] if c.get("ad_soyad") else "Merhaba"
                 req_lib.post(f"{base}/sendMessage", json={
                     "chat_id": uid,
-                    "text": f"📋 Günaydın *{ad}*!\n\nBugünün eğitimi: *{egitim['baslik']}*\nBaşlamak için 👇",
+                    "text": f"📋 *{ad}* merhaba!\n\n*{egitim['baslik']}* eğitimi sizi bekliyor.\nBaşlamak için 👇",
                     "parse_mode": "Markdown",
                     "reply_markup": keyboard
                 }, timeout=10)
@@ -3377,7 +3451,7 @@ def api_toplu_egitim_gonder():
 
         return jsonify({
             "basarili": True,
-            "mesaj": f"{gonderilen} çalışana gönderildi, {atlanan} izinli atlandı."
+            "mesaj": f"<b>{egitim['baslik']}</b> → {gonderilen} kişiye gönderildi, {atlanan} kişi atlandı."
         })
 
     except Exception as e:
