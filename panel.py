@@ -170,6 +170,7 @@ textarea.form-input{min-height:80px;resize:vertical}
   <div class="tab" onclick="sekme('mesajlar',this)">💬 Grup Mesajları</div>
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
   <div class="tab" onclick="sekme('davetler',this)">📱 Davetler</div>
+  <div class="tab" onclick="sekme('toplu-egitim',this)">🚀 Toplu Gönder</div>
 </div>
 
 <div class="main">
@@ -266,6 +267,25 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 
   <!-- DAVETLER -->
+  <div class="tab-content" id="tab-toplu-egitim">
+    <div style="max-width:520px;margin:32px auto 0">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:16px">
+        <div style="font-family:Syne,sans-serif;font-weight:700;font-size:17px;margin-bottom:6px">🚀 Toplu Eğitim Gönder</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6">Bugünün eğitimini tüm aktif çalışanlara şimdi gönder.<br>Bot çökmesi veya gecikmesi durumunda kullan.</div>
+        <div style="background:#fff8e6;border:1px solid #f5d87a;border-radius:10px;padding:12px 16px;font-size:13px;color:#856404;margin-bottom:20px">⚠️ Sabah otomatik gönderim zaten gittiyse çalışanlar <strong>ikinci kez</strong> mesaj alır. Sadece gönderim gitmediyse kullan.</div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Firma</div>
+          <select id="toplu-firma-sec" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);outline:none"><option value="">Yükleniyor...</option></select>
+        </div>
+        <div id="toplu-egitim-sonuc" style="display:none;padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:16px"></div>
+        <button class="btn btn-primary" style="width:100%;padding:14px;font-size:14px" onclick="topluEgitimGonder(this)">🚀 Tüm Çalışanlara Şimdi Gönder</button>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px">
+        <div style="font-family:Syne,sans-serif;font-weight:700;font-size:14px;margin-bottom:10px">ℹ️ Ne zaman kullanılır?</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.9">• Bot sabah 08:00\'de çökmüşse ve eğitim gitmediyse<br>• Sunucu yeniden başlatması sonrası telafi için<br>• Yeni eklenen çalışanın aynı gün eğitim alması gerekiyorsa</div>
+      </div>
+    </div>
+  </div>
   <div class="tab-content" id="tab-davetler">
     <!-- Ayarlar bolumu -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px">
@@ -658,6 +678,7 @@ function sekme(ad, el) {
   if(ad==='egitimler') egitimListesiYukle();
   if(ad==='mesajlar') mesajLogYukle();
   if(ad==='davetler') { davetListesiYukle(); davetAyarlariYukle(); }
+  if(ad==='toplu-egitim') { topluEgitimFirmalariYukle(); }
 }
 
 // ── KAYITLAR ──────────────────────────────
@@ -2125,6 +2146,51 @@ window.onload = function() {
   } catch(e) {}
   anaSeyfayaDon();
 };
+
+// ── Toplu Eğitim Gönder ──────────────────────────────────────────
+async function topluEgitimFirmalariYukle() {
+  const sel = document.getElementById('toplu-firma-sec');
+  if (!sel) return;
+  try {
+    const r = await fetch('/panel/api/firmalar-detay');
+    const firmalar = await r.json();
+    sel.innerHTML = firmalar.length
+      ? firmalar.map(f => `<option value="${f.firma_id}">${f.ad}</option>`).join('')
+      : '<option value="varsayilan">Varsayılan Firma</option>';
+  } catch(e) {
+    sel.innerHTML = '<option value="varsayilan">Varsayılan Firma</option>';
+  }
+}
+
+async function topluEgitimGonder(btn) {
+  const sonuc = document.getElementById('toplu-egitim-sonuc');
+  const firmaId = document.getElementById('toplu-firma-sec')?.value || 'varsayilan';
+  btn.disabled = true;
+  btn.textContent = '⏳ Gönderiliyor...';
+  sonuc.style.display = 'none';
+  try {
+    const r = await fetch('/panel/api/toplu-egitim-gonder', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({firma_id: firmaId})
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      sonuc.style.cssText = 'display:block;background:#e8f7f0;border:1px solid #b7e8d0;color:var(--green)';
+      sonuc.innerHTML = '✅ <strong>Eğitim gönderildi!</strong> ' + (d.mesaj || '');
+    } else {
+      sonuc.style.cssText = 'display:block;background:#fdecea;border:1px solid #f5bcb8;color:var(--red)';
+      sonuc.innerHTML = '❌ Hata: ' + (d.hata || 'Bilinmeyen hata');
+    }
+  } catch(e) {
+    sonuc.style.cssText = 'display:block;background:#fdecea;border:1px solid #f5bcb8;color:var(--red)';
+    sonuc.innerHTML = '❌ Bağlantı hatası: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Tüm Çalışanlara Şimdi Gönder';
+  }
+}
+
 </script>
 {% endif %}
 </body>
@@ -3241,6 +3307,82 @@ def api_ayar_kaydet():
         return jsonify({"basarili":False,"hata":str(e)})
 
 
+
+
+@app.route("/panel/api/toplu-egitim-gonder", methods=["POST"])
+def api_toplu_egitim_gonder():
+    """Bugünün eğitimini tüm çalışanlara şimdi gönder (panel üzerinden acil gönderim)."""
+    if not session.get("panel_giris"):
+        return jsonify({"basarili": False, "hata": "Yetkisiz"}), 401
+
+    from config import GRUP_ID
+    from calisanlar import tum_calisanlar
+    from durum import siradaki_egitim_al, aktif_egitim_set, izinli_mi
+    import requests as req_lib, time as t_lib
+
+    veri = request.get_json() or {}
+    firma_id = veri.get("firma_id", "varsayilan")
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        return jsonify({"basarili": False, "hata": "TELEGRAM_BOT_TOKEN tanımlı değil"})
+
+    base = f"https://api.telegram.org/bot{token}"
+
+    try:
+        egitim_id, egitim = siradaki_egitim_al()
+        if not egitim:
+            return jsonify({"basarili": False, "hata": "Aktif eğitim bulunamadı"})
+
+        aktif_egitim_set(egitim_id)
+        keyboard = {"inline_keyboard": [[{"text": "▶️ Eğitime Başla", "callback_data": f"egitim_baslat:{egitim_id}"}]]}
+
+        # Gruba gönder
+        if GRUP_ID and GRUP_ID != 0:
+            try:
+                req_lib.post(f"{base}/sendMessage", json={
+                    "chat_id": GRUP_ID,
+                    "text": f"*{egitim['baslik']}* eğitimi başladı! Katılmak için 👇",
+                    "parse_mode": "Markdown",
+                    "reply_markup": keyboard
+                }, timeout=10)
+            except Exception as e:
+                logger.warning(f"Grup mesajı gönderilemedi: {e}")
+
+        # Çalışanlara kişisel mesaj
+        from datetime import date
+        bugun = date.today().strftime("%d.%m.%Y")
+        calisanlar = tum_calisanlar()
+        gonderilen = 0
+        atlanan = 0
+
+        for uid, c in calisanlar.items():
+            if not uid or uid <= 0:
+                continue
+            if izinli_mi(uid, bugun):
+                atlanan += 1
+                continue
+            try:
+                ad = c.get("ad_soyad", "").split()[0] if c.get("ad_soyad") else "Merhaba"
+                req_lib.post(f"{base}/sendMessage", json={
+                    "chat_id": uid,
+                    "text": f"📋 Günaydın *{ad}*!\n\nBugünün eğitimi: *{egitim['baslik']}*\nBaşlamak için 👇",
+                    "parse_mode": "Markdown",
+                    "reply_markup": keyboard
+                }, timeout=10)
+                gonderilen += 1
+                t_lib.sleep(0.1)
+            except Exception as e:
+                logger.warning(f"Mesaj gönderilemedi (uid={uid}): {e}")
+
+        return jsonify({
+            "basarili": True,
+            "mesaj": f"{gonderilen} çalışana gönderildi, {atlanan} izinli atlandı."
+        })
+
+    except Exception as e:
+        logger.error(f"Toplu egitim gönderim hatası: {e}")
+        return jsonify({"basarili": False, "hata": str(e)})
 
 @app.route("/panel/ekle-calisan")
 def ekle_calisan_redirect():
