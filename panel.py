@@ -3,6 +3,8 @@ Yönetici Paneli — Flask web uygulaması
 """
 
 from flask import Flask, render_template_string, jsonify, request, session, redirect
+import logging as _logging
+_isg_logger = _logging.getLogger("isg_module")
 from datetime import date
 import os, json, re
 from sheets import tum_kayitlar_getir
@@ -11,6 +13,15 @@ from calisanlar import tum_calisanlar, calisan_ekle, calisan_guncelle, calisan_s
 from durum import izin_ekle, izin_kaldir, izinli_mi, eksik_egitimler
 
 app = Flask(__name__)
+
+# ISG Modülü — izole Blueprint (hata alsa bile ana sistem çalışır)
+try:
+    from isg import isg_blueprint
+    app.register_blueprint(isg_blueprint, url_prefix='/panel/isg')
+    _isg_logger.info("ISG modülü yüklendi")
+except Exception as _isg_e:
+    _isg_logger.warning(f"ISG modülü yüklenemedi (sistem çalışmaya devam eder): {_isg_e}")
+
 app.secret_key = os.environ.get("PANEL_SECRET_KEY", "egitimbot2026")
 PANEL_SIFRE = os.environ.get("PANEL_SIFRE", "admin123")
 
@@ -171,6 +182,7 @@ textarea.form-input{min-height:80px;resize:vertical}
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
   <div class="tab" onclick="sekme('davetler',this)">📱 Davetler</div>
   <div class="tab" onclick="sekme('toplu-egitim',this)">🚀 Toplu Gönder</div>
+  <div class="tab" onclick="sekme('isg',this)">🛡️ ISG</div>
 </div>
 
 <div class="main">
@@ -267,6 +279,11 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 
   <!-- DAVETLER -->
+  <div class="tab-content" id="tab-isg">
+    <div id="isg-yukleniyor" style="text-align:center;padding:60px;color:var(--muted)">
+      <div class="spinner" style="margin:0 auto 16px"></div>ISG modülü yükleniyor...
+    </div>
+  </div>
   <div class="tab-content" id="tab-toplu-egitim">
     <div style="max-width:520px;margin:32px auto 0">
       <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:16px">
@@ -695,6 +712,7 @@ function sekme(ad, el) {
   if(ad==='mesajlar') mesajLogYukle();
   if(ad==='davetler') { davetListesiYukle(); davetAyarlariYukle(); }
   if(ad==='toplu-egitim') { topluEgitimFirmalariYukle(); }
+  if(ad==='isg') { isgUzmanlariYukle(); }
 }
 
 // ── KAYITLAR ──────────────────────────────
@@ -2298,6 +2316,37 @@ async function topluEgitimGonder(btn) {
   } finally {
     btn.disabled = false;
     btn.textContent = '🚀 Seçilen Eğitimi Şimdi Gönder';
+  }
+}
+
+
+// ── ISG Modülü — sekme açılınca HTML'i yükle ─────────────────
+let _isgYuklendi = false;
+async function isgUzmanlariYukle() {
+  if (_isgYuklendi) return;
+  const kap = document.getElementById('isg-yukleniyor');
+  try {
+    const r = await fetch('/panel/isg/html');
+    if (!r.ok) throw new Error('ISG modülü yanıt vermedi');
+    const html = await r.text();
+    const tab = document.getElementById('tab-isg');
+    if (tab) tab.innerHTML = html;
+    _isgYuklendi = true;
+    // Yüklenen script'leri çalıştır
+    tab.querySelectorAll('script').forEach(s => {
+      const yeni = document.createElement('script');
+      yeni.textContent = s.textContent;
+      document.body.appendChild(yeni);
+    });
+    // İlk yüklemede uzmanları getir
+    if (typeof isgUzmanlariYukle === 'function') {
+      setTimeout(() => {
+        const ilkTab = document.querySelector('.isg-alt-tab');
+        if (ilkTab) ilkTab.click();
+      }, 100);
+    }
+  } catch(e) {
+    if (kap) kap.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>ISG modülü yüklenemedi: ' + e.message + '</div>';
   }
 }
 
