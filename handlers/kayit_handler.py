@@ -294,15 +294,65 @@ async def sinav_tamamla_direkt(context, user_id, durum, calisan=None, guncelle=N
     kullanici_durum.pop(user_id, None)
 
     deneme_txt = f" ({deneme_no}. denemede)" if deneme_no > 1 else ""
+
+    # ISG uzman bilgisini al (modül yoksa sessizce atla)
+    uzman_satiri = ""
+    try:
+        from isg.atama_gecmisi import uzman_bilgisi_bul
+        from isg.uzmanlar import uzman_unvan_str
+        from isg.firma_detay import firma_detay_getir, tehlike_sinifi_str
+        from firma_manager import tum_firmalar, grup_id_den_firma
+        import datetime as _dt
+
+        egitim_tarihi = simdi.strftime("%d.%m.%Y")
+
+        # Çalışanın hangi firmada olduğunu bul (grup_id üzerinden)
+        firma_id = None
+        try:
+            from config import GRUP_ID
+            if GRUP_ID:
+                fid, _ = grup_id_den_firma(GRUP_ID)
+                firma_id = fid
+        except Exception:
+            firma_id = "varsayilan"
+
+        if firma_id:
+            bilgi = uzman_bilgisi_bul(firma_id, egitim_tarihi)
+            uzman = bilgi.get("is_guvenligi_uzmani", {})
+            if uzman:
+                detay = firma_detay_getir(firma_id)
+                firma_ad = tum_firmalar().get(firma_id, {}).get("ad", "")
+                tehlike = tehlike_sinifi_str(detay.get("tehlike_sinifi", ""))
+                uzman_satiri = (
+                    f"\n\n─────────────────────\n"
+                    f"🛡️ *{uzman_unvan_str(uzman)}*"
+                )
+                if firma_ad:
+                    uzman_satiri += f"\n🏭 {firma_ad}"
+                if tehlike:
+                    uzman_satiri += f" · {tehlike}"
+                uzman_satiri += "\n─────────────────────"
+    except Exception as _isg_e:
+        logger.debug(f"ISG uzman bilgisi alınamadı (normal): {_isg_e}")
+
     if gecti:
-        mesaj = f"Tebrikler {calisan['ad_soyad'].split()[0]}!\n\nEgitimi gecdiniz{deneme_txt}!\nPuaniniz: {puan}/100\n\nIyi calismalar!"
+        mesaj = (
+            f"✅ *Tebrikler {calisan['ad_soyad'].split()[0]}!*\n\n"
+            f"🏆 *{egitim.get('baslik', '')}* eğitimini geçtiniz{deneme_txt}!\n"
+            f"📊 Puanınız: *{puan}/100*"
+            f"{uzman_satiri}"
+        )
     else:
-        mesaj = f"Egitim Sonucu\n\nGecemediniz.\nPuaniniz: {puan}/100 (Gecme: {GECME_NOTU})\n\nYoneticiniz ek hak tanimlarsa tekrar girebilirsiniz."
+        mesaj = (
+            f"📋 *Eğitim Sonucu*\n\n"
+            f"Geçemediniz. Puanınız: *{puan}/100* (Geçme: {GECME_NOTU})\n\n"
+            f"Yöneticiniz ek hak tanımlarsa tekrar girebilirsiniz."
+        )
 
     if guncelle:
-        await guncelle.message.reply_text(mesaj)
+        await guncelle.message.reply_text(mesaj, parse_mode="Markdown")
     else:
-        await context.bot.send_message(chat_id=user_id, text=mesaj)
+        await context.bot.send_message(chat_id=user_id, text=mesaj, parse_mode="Markdown")
 
 
 async def _admin_bildir(context, user):
