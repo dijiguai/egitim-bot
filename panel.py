@@ -279,8 +279,9 @@ textarea.form-input{min-height:80px;resize:vertical}
         </div>
         <div style="margin-bottom:14px">
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Gönderilecek Eğitim</div>
-          <select id="toplu-egitim-sec" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);outline:none"><option value="">Önce firma seçin...</option></select>
+          <select id="toplu-egitim-sec" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);outline:none" onchange="topluEgitimSecildi()"><option value="">Önce firma seçin...</option></select>
         </div>
+        <div id="toplu-egitim-ozet" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;max-height:260px;overflow-y:auto"></div>
         <div style="margin-bottom:20px">
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Kimler alacak?</div>
           <div style="display:flex;gap:8px">
@@ -2183,14 +2184,65 @@ async function topluEgitimListesiYukle() {
   const sel = document.getElementById('toplu-egitim-sec');
   if (!sel) return;
   sel.innerHTML = '<option value="">Yükleniyor...</option>';
+  const firmaId = document.getElementById('toplu-firma-sec')?.value || '';
   try {
-    const r = await fetch('/panel/api/egitimler');
-    const d = await r.json();
-    const egitimler = d.egitimler || [];
+    const r = await fetch(`/panel/api/egitimler?firma_id=${firmaId}`);
+    const egitimler = await r.json();  // endpoint direkt liste dönüyor
+    if (!Array.isArray(egitimler) || !egitimler.length) {
+      sel.innerHTML = '<option value="bugun">📅 Bugünün sıradaki eğitimi (otomatik)</option>';
+      return;
+    }
     sel.innerHTML = '<option value="bugun">📅 Bugünün sıradaki eğitimi (otomatik)</option>' +
       egitimler.map(e => `<option value="${e.id}">${e.baslik}</option>`).join('');
   } catch(e) {
-    sel.innerHTML = '<option value="bugun">Bugünün sıradaki eğitimi</option>';
+    sel.innerHTML = '<option value="bugun">📅 Bugünün sıradaki eğitimi (otomatik)</option>';
+  }
+}
+
+async function topluEgitimSecildi() {
+  const egitimId = document.getElementById('toplu-egitim-sec')?.value;
+  const firmaId = document.getElementById('toplu-firma-sec')?.value || 'varsayilan';
+  const ozet = document.getElementById('toplu-egitim-ozet');
+  if (!ozet) return;
+  if (!egitimId || egitimId === 'bugun') {
+    ozet.style.display = 'none';
+    return;
+  }
+  ozet.innerHTML = '<div style="color:var(--muted);font-size:13px">Yükleniyor...</div>';
+  ozet.style.display = 'block';
+  try {
+    const r = await fetch(`/panel/api/egitim-kisi-ozet?egitim_id=${egitimId}&firma_id=${firmaId}`);
+    const d = await r.json();
+    if (!d.ozet || !d.ozet.length) {
+      ozet.innerHTML = '<div style="font-size:13px;color:var(--muted)">Bu eğitimi henüz kimse almamış.</div>';
+      return;
+    }
+    const satirlar = d.ozet.map(k => {
+      const durum = k.gecti
+        ? `<span style="color:var(--green);font-weight:600">✅ Geçti</span>`
+        : `<span style="color:var(--red);font-weight:600">❌ Kaldı</span>`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <span style="font-weight:600;font-size:13px">${k.ad_soyad}</span>
+          <span style="color:var(--muted);font-size:12px;margin-left:8px">${k.gorev}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;color:var(--muted)">${k.deneme_sayisi}x deneme · En iyi: ${k.en_iyi_puan}</span>
+          ${durum}
+        </div>
+      </div>`;
+    }).join('');
+    ozet.innerHTML = `
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">
+        Bu eğitimi alanlar (${d.ozet.length} kişi)
+      </div>
+      ${satirlar}
+      <div style="margin-top:10px;font-size:12px;color:var(--muted)">
+        Almayan <b style="color:var(--text)">${d.almayan_sayisi}</b> kişi var.
+        "Eğitimi olmayanlar" seçeneğiyle sadece onlara gönderebilirsin.
+      </div>`;
+  } catch(e) {
+    ozet.innerHTML = '<div style="font-size:13px;color:var(--red)">Özet yüklenemedi.</div>';
   }
 }
 
@@ -3366,6 +3418,96 @@ def api_ayar_kaydet():
 
 
 
+
+
+@app.route("/panel/api/egitim-kisi-ozet")
+def api_egitim_kisi_ozet():
+    """Belirli bir eğitimi kaç kişinin aldığını, geçip geçmediğini döner."""
+    if not session.get("panel_giris"):
+        return jsonify({"hata": "Yetkisiz"}), 401
+
+    egitim_id = request.args.get("egitim_id", "")
+    firma_id  = request.args.get("firma_id", "varsayilan")
+
+    if not egitim_id:
+        return jsonify({"hata": "egitim_id gerekli"}), 400
+
+    egitim = EGITIMLER.get(egitim_id)
+    if not egitim:
+        return jsonify({"hata": "Eğitim bulunamadı"}), 404
+
+    egitim_baslik = egitim.get("baslik", "")
+
+    try:
+        from sheets import tum_kayitlar_getir
+        from calisanlar import tum_calisanlar
+
+        kayitlar = tum_kayitlar_getir(firma_id)
+        calisanlar = tum_calisanlar()
+
+        # Eğitime ait kayıtları filtrele
+        egitim_kayitlari = [
+            k for k in kayitlar
+            if k.get("egitim_konusu", "") == egitim_baslik
+        ]
+
+        # Çalışan bazında grupla
+        calisan_kayit_map: dict = {}
+        for k in egitim_kayitlari:
+            tid = str(k.get("telegram_id", ""))
+            if not tid:
+                continue
+            calisan_kayit_map.setdefault(tid, []).append(k)
+
+        ozet = []
+        alan_tid_seti = set()
+
+        for tid_str, kayit_listesi in calisan_kayit_map.items():
+            try:
+                tid_int = int(tid_str)
+            except ValueError:
+                continue
+
+            c = calisanlar.get(tid_int, {})
+            ad_soyad = c.get("ad_soyad") or f"ID:{tid_str}"
+            gorev    = c.get("gorev", "—")
+
+            gecti    = any(k.get("durum", "") in ("GECTI", "GECTİ") for k in kayit_listesi)
+            en_iyi   = max((int(k.get("puan") or 0) for k in kayit_listesi), default=0)
+            son_tarih = sorted(
+                (k.get("tarih", "") for k in kayit_listesi), reverse=True
+            )[0]
+
+            ozet.append({
+                "telegram_id":   tid_int,
+                "ad_soyad":      ad_soyad,
+                "gorev":         gorev,
+                "deneme_sayisi": len(kayit_listesi),
+                "en_iyi_puan":   en_iyi,
+                "gecti":         gecti,
+                "son_tarih":     son_tarih,
+            })
+            alan_tid_seti.add(tid_str)
+
+        # Hiç almayan aktif çalışan sayısı
+        almayan_sayisi = sum(
+            1 for tid in calisanlar
+            if str(tid) not in alan_tid_seti
+        )
+
+        # Ada göre sırala
+        ozet.sort(key=lambda x: x["ad_soyad"])
+
+        return jsonify({
+            "egitim_baslik": egitim_baslik,
+            "alan_sayisi":   len(ozet),
+            "almayan_sayisi": almayan_sayisi,
+            "ozet":          ozet,
+        })
+
+    except Exception as e:
+        logger.error(f"egitim-kisi-ozet hatasi: {e}")
+        return jsonify({"hata": str(e)}), 500
 
 @app.route("/panel/api/toplu-egitim-gonder", methods=["POST"])
 def api_toplu_egitim_gonder():
