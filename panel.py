@@ -2366,39 +2366,45 @@ async function topluEgitimGonder(btn) {
 // ── ISG Modülü — sekme açılınca HTML'i yükle ─────────────────
 let _isgYuklendi = false;
 async function isgUzmanlariYukle() {
+  const tab = document.getElementById('tab-isg');
   if (_isgYuklendi) {
-    // Zaten yüklendi, sadece uzman listesini tazele
-    if (typeof window._isgUzmanListele === 'function') window._isgUzmanListele();
+    // Zaten yüklendi — ilk alt sekmeyi tekrar aç
+    const ilk = tab.querySelector('.isg-alt-tab');
+    if (ilk) ilk.click();
     return;
   }
-  const tab = document.getElementById('tab-isg');
-  const kap = document.getElementById('isg-yukleniyor');
   try {
     const r = await fetch('/panel/isg/html');
-    if (!r.ok) throw new Error('ISG modülü yanıt vermedi (' + r.status + ')');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const html = await r.text();
-    // innerHTML ile ekle — script tagları çalışmaz, ayrıca eval et
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    // Script dışı içeriği ekle
-    const scriptler = [];
+    // Script'leri çıkar
+    const scriptMetinleri = [];
     doc.querySelectorAll('script').forEach(s => {
-      scriptler.push(s.textContent);
+      scriptMetinleri.push(s.textContent);
+      s.remove();
+    });
+    // Style'ları çıkar ve head'e ekle
+    doc.querySelectorAll('style').forEach(s => {
+      document.head.appendChild(s.cloneNode(true));
       s.remove();
     });
     tab.innerHTML = doc.body.innerHTML;
-    // Script'leri sırayla çalıştır
-    for (const kod of scriptler) {
-      try { eval(kod); } catch(e2) { console.warn('ISG script hatası:', e2); }
+    // Script'leri global scope'a Function ile yükle
+    for (const kod of scriptMetinleri) {
+      try {
+        const fn = new Function(kod);
+        fn.call(window);
+      } catch(e2) { console.warn('ISG script yüklenemedi:', e2.message); }
     }
     _isgYuklendi = true;
-    // İlk alt sekmeyi aç
     setTimeout(() => {
-      const ilkTab = document.querySelector('.isg-alt-tab');
-      if (ilkTab) ilkTab.click();
-    }, 150);
+      const ilk = tab.querySelector('.isg-alt-tab');
+      if (ilk) ilk.click();
+    }, 100);
   } catch(e) {
-    if (tab) tab.innerHTML = '<div class="empty" style="padding:60px"><div class="empty-icon">⚠️</div>ISG modülü yüklenemedi: ' + e.message + '<br><small style="color:var(--muted)">isg/ klasörünün repoya eklendiğini ve deploy yapıldığını kontrol edin.</small></div>';
+    if (tab) tab.innerHTML = '<div style="padding:60px;text-align:center;color:var(--muted)"><div style="font-size:40px;margin-bottom:12px">⚠️</div>ISG modülü yüklenemedi: ' + e.message + '<br><small>isg/ klasörünün repoya eklendiğini kontrol edin.</small></div>';
   }
 }
 
@@ -2437,53 +2443,68 @@ async function takvimYukle() {
     selSon.innerHTML = '<option value="">Yarın için eğitim seç...</option>' +
       sirali.map(e => `<option value="${e.id}" ${e.id === ozet.sonraki_id ? 'selected' : ''}>${e.sira}. ${e.baslik}</option>`).join('');
 
-    // Sıra listesi
+    // Sıra listesi — ↑↓ taşıma butonları
     const siraEl = document.getElementById('takvim-sira-liste');
     if (!sirali.length) {
       siraEl.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>Eğitim yok</div>';
     } else {
-      siraEl.innerHTML = sirali.map(e => `
-        <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
-          <input type="number" value="${e.sira}" min="1" max="999"
-            style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:13px;text-align:center;outline:none"
-            onchange="takvimSiraGuncelle('${e.id}', this.value, this)"
-            onkeydown="if(event.key==='Enter')takvimSiraGuncelle('${e.id}',this.value,this)">
+      // Sıra numaralarını 1'den başlayarak normalize et
+      siraEl.innerHTML = sirali.map((e, idx) => `
+        <div id="sira-satir-${e.id}" style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);background:${e.id===ozet.bugun_id?'#e85c2e0a':e.id===ozet.sonraki_id?'#27a86e0a':'var(--card)'}">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <button onclick="takvimSiraYukari('${e.id}',${idx})"
+              style="background:var(--bg);border:1px solid var(--border);border-radius:4px;width:24px;height:20px;cursor:pointer;font-size:10px;line-height:1;display:flex;align-items:center;justify-content:center"
+              ${idx===0?'disabled style="opacity:0.3;cursor:default"':''}>▲</button>
+            <button onclick="takvimSiraAsagi('${e.id}',${idx},${sirali.length})"
+              style="background:var(--bg);border:1px solid var(--border);border-radius:4px;width:24px;height:20px;cursor:pointer;font-size:10px;line-height:1;display:flex;align-items:center;justify-content:center"
+              ${idx===sirali.length-1?'disabled style="opacity:0.3;cursor:default"':''}>▼</button>
+          </div>
+          <span style="font-size:12px;color:var(--muted);min-width:20px;text-align:right">${idx+1}</span>
           <span style="font-size:13px;flex:1">${e.baslik}</span>
-          ${e.id === ozet.bugun_id ? '<span style="font-size:11px;background:#e85c2e22;color:var(--accent);padding:2px 8px;border-radius:20px;font-weight:600">Bugün</span>' : ''}
-          ${e.id === ozet.sonraki_id ? '<span style="font-size:11px;background:#27a86e22;color:var(--green);padding:2px 8px;border-radius:20px;font-weight:600">Yarın</span>' : ''}
+          ${e.id===ozet.bugun_id?'<span style="font-size:11px;background:#e85c2e22;color:var(--accent);padding:2px 8px;border-radius:20px;font-weight:600">Bugün</span>':''}
+          ${e.id===ozet.sonraki_id?'<span style="font-size:11px;background:#27a86e22;color:var(--green);padding:2px 8px;border-radius:20px;font-weight:600">Yarın</span>':''}
         </div>`).join('');
+      // Sıra dizisini global'e kaydet
+      window._takvimSiraListesi = sirali.map((e,i) => ({...e, gosterilen_sira: i+1}));
     }
 
-    // Geçmiş
+    // Geçmiş — EĞİTİM BAZLI
     const gecmisEl = document.getElementById('takvim-gecmis-liste');
     const gecmis = d.gecmis || [];
     if (!gecmis.length) {
       gecmisEl.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Henüz kayıt yok</div>';
     } else {
       gecmisEl.innerHTML = `<div class="table-wrap"><table>
-        <thead><tr><th>Tarih</th><th>Eğitim</th><th>Katılan</th><th>Geçti</th><th>Katılmayan</th><th></th></tr></thead>
+        <thead><tr>
+          <th>Eğitim</th>
+          <th>Alan Kişi</th>
+          <th>Toplam Giriş</th>
+          <th>Geçti</th>
+          <th>Almayan</th>
+          <th>Son Tarih</th>
+        </tr></thead>
         <tbody>` +
-        gecmis.map(g => {
-          const katOran = g.toplam_calisan ? Math.round(g.katilan / g.toplam_calisan * 100) : 0;
-          return `<tr>
-            <td style="font-size:12px;white-space:nowrap">${g.tarih}</td>
-            <td style="font-size:13px">${g.egitim}</td>
-            <td><span style="color:var(--accent);font-weight:600">${g.katilan}</span><span style="color:var(--muted);font-size:11px">/${g.toplam_calisan}</span></td>
-            <td><span style="color:var(--green);font-weight:600">${g.gecti}</span></td>
+        gecmis.map((g, gi) => {
+          const satirId = 'eg-detay-' + gi;
+          const alanlarJson = JSON.stringify(g.alanlar||[]).replace(/'/g,"&#39;");
+          const katilmayanJson = JSON.stringify(g.katilmayanlar||[]).replace(/'/g,"&#39;");
+          return `<tr style="cursor:pointer" onclick="takvimEgitimDetayAc(${gi},this)">
+            <td style="font-size:13px;font-weight:600">${g.egitim}</td>
+            <td><span style="color:var(--accent);font-weight:700">${g.alan_kisi}</span><span style="color:var(--muted);font-size:11px">/${g.toplam_calisan}</span></td>
+            <td style="font-size:13px;color:var(--muted)">${g.toplam_giris} giriş</td>
+            <td><span style="color:var(--green);font-weight:700">${g.gecti_sayisi}</span></td>
             <td>${g.katilmayan_sayisi > 0
-              ? `<button class="btn btn-dark btn-sm" onclick="takvimKatilmayanGoster('${g.tarih}','${g.egitim.replace(/'/g,"\\'")}',this)" data-idler='${JSON.stringify(g.katilmayanlar)}'>${g.katilmayan_sayisi} kişi ▼</button>`
-              : '<span style="color:var(--green);font-size:12px">✅ Tamamı</span>'
-            }</td>
-            <td></td>
+              ? `<span style="color:var(--red);font-weight:600">${g.katilmayan_sayisi} kişi</span>`
+              : '<span style="color:var(--green);font-size:12px">✅</span>'}</td>
+            <td style="font-size:12px;color:var(--muted)">${g.son_tarih||'—'}</td>
           </tr>
-          <tr id="katilmayan-detay-${g.tarih.replace(/\./g,'-')}" style="display:none">
-            <td colspan="6" style="padding:0">
-              <div style="padding:12px 16px;background:var(--bg)">
-                <div id="katilmayan-icerik-${g.tarih.replace(/\./g,'-')}"></div>
-              </div>
+          <tr id="${satirId}" style="display:none">
+            <td colspan="6" style="padding:0;background:var(--bg)">
+              <div style="padding:16px" data-alanlar='${alanlarJson}' data-katilmayan='${katilmayanJson}' data-egitim-adi="${g.egitim.replace(/"/g,'&quot;')}"></div>
             </td>
           </tr>`;
         }).join('') + '</tbody></table></div>';
+      window._takvimGecmis = gecmis;
     }
   } catch(e) {
     document.getElementById('takvim-gecmis-liste').innerHTML =
@@ -2491,20 +2512,39 @@ async function takvimYukle() {
   }
 }
 
-async function takvimSiraGuncelle(egitimId, yeniSira, el) {
+async function takvimSiraGuncelle(egitimId, yeniSira) {
   try {
     const r = await fetch('/panel/api/egitim-sira-guncelle', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({egitim_id: egitimId, sira: parseInt(yeniSira)})
     });
-    const d = await r.json();
-    if (d.basarili) {
-      el.style.borderColor = 'var(--green)';
-      setTimeout(() => { el.style.borderColor = ''; takvimYukle(); }, 800);
-    } else {
-      el.style.borderColor = 'var(--red)';
-    }
-  } catch(e) { el.style.borderColor = 'var(--red)'; }
+    return (await r.json()).basarili;
+  } catch(e) { return false; }
+}
+
+async function takvimSiraYukari(egitimId, idx) {
+  const liste = window._takvimSiraListesi || [];
+  if (idx <= 0 || !liste.length) return;
+  // idx ile idx-1'i yer değiştir
+  const usteki = liste[idx-1];
+  const altaki = liste[idx];
+  const [ok1, ok2] = await Promise.all([
+    takvimSiraGuncelle(altaki.id, idx),     // altaki → üste
+    takvimSiraGuncelle(usteki.id, idx+1),   // üsteki → alta
+  ]);
+  if (ok1 || ok2) setTimeout(takvimYukle, 300);
+}
+
+async function takvimSiraAsagi(egitimId, idx, toplam) {
+  const liste = window._takvimSiraListesi || [];
+  if (idx >= toplam-1 || !liste.length) return;
+  const usteki = liste[idx];
+  const altaki = liste[idx+1];
+  const [ok1, ok2] = await Promise.all([
+    takvimSiraGuncelle(usteki.id, idx+2),   // üsteki → alta
+    takvimSiraGuncelle(altaki.id, idx+1),   // altaki → üste
+  ]);
+  if (ok1 || ok2) setTimeout(takvimYukle, 300);
 }
 
 async function takvimSonrakiKaydet() {
@@ -2526,36 +2566,76 @@ async function takvimSonrakiKaydet() {
   }
 }
 
-function takvimKatilmayanGoster(tarih, egitim, btn) {
-  const tarihId = tarih.replace(/\./g, '-');
-  const detaySatir = document.getElementById('katilmayan-detay-' + tarihId);
-  const icerikEl = document.getElementById('katilmayan-icerik-' + tarihId);
+let _takvimEgitimIdCache = {};
+
+function takvimEgitimDetayAc(gi, trEl) {
+  const detaySatir = trEl.nextElementSibling;
   if (!detaySatir) return;
-
   const acik = detaySatir.style.display !== 'none';
-  detaySatir.style.display = acik ? 'none' : 'table-row';
-  btn.textContent = acik ? btn.textContent.replace('▲','▼') : btn.textContent.replace('▼','▲');
+  // Diğer açık satırları kapat
+  document.querySelectorAll('[id^="eg-detay-"]').forEach(s => s.style.display='none');
+  if (acik) return;
+  detaySatir.style.display = 'table-row';
 
-  if (!acik && icerikEl) {
-    const kisiler = JSON.parse(btn.getAttribute('data-idler') || '[]');
-    // Eğitim ID'sini bul
-    fetch('/panel/api/egitimler').then(r => r.json()).then(egitimler => {
-      const eg = egitimler.find(e => e.baslik === egitim);
-      const egitimId = eg ? eg.id : '';
-      icerikEl.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div style="font-size:13px;font-weight:600">${tarih} · ${egitim} · Katılmayanlar</div>
-          ${egitimId ? `<button class="btn btn-primary btn-sm" onclick="takvimKatilmayanlaraGonder('${egitimId}', ${JSON.stringify(kisiler.map(k=>k.tid))}, this)">📨 Hepsine Gönder</button>` : ''}
-        </div>` +
-        kisiler.map(k => `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-            <div>
-              <span style="font-size:13px;font-weight:600">${k.ad}</span>
-              <span style="font-size:12px;color:var(--muted);margin-left:8px">${k.gorev}</span>
+  const icerikDiv = detaySatir.querySelector('td > div');
+  if (!icerikDiv || icerikDiv.dataset.rendered) return;
+  icerikDiv.dataset.rendered = '1';
+
+  const alanlar = JSON.parse(icerikDiv.dataset.alanlar || '[]');
+  const katilmayanlar = JSON.parse(icerikDiv.dataset.katilmayan || '[]');
+  const egitimAdi = icerikDiv.dataset.egitimAdi || '';
+
+  // Eğitim ID'sini cache'ten veya API'den al
+  const renderDetay = (egitimId) => {
+    const katilmayanIdler = katilmayanlar.map(k => k.tid);
+    icerikDiv.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">
+            👤 Alan kişiler (${alanlar.length})
+          </div>
+          ${alanlar.length ? alanlar.map(a => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+              <div>
+                <span style="font-size:13px;font-weight:600">${a.ad}</span>
+                <span style="font-size:12px;color:var(--muted);margin-left:6px">${a.gorev}</span>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px">
+                  ${a.deneme_sayisi} giriş · ${a.gecti ? '<span style="color:var(--green)">Geçti ✓</span>' : '<span style="color:var(--red)">Kaldı</span>'}
+                  ${a.tarihler&&a.tarihler.length ? ' · ' + a.tarihler.slice(-3).join(', ') : ''}
+                </div>
+              </div>
+            </div>`).join('') : '<div style="color:var(--muted);font-size:13px">Henüz kimse almadı.</div>'}
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px">
+              ❌ Almayan kişiler (${katilmayanlar.length})
             </div>
-            ${egitimId ? `<button class="btn btn-dark btn-sm" onclick="takvimKatilmayanlaraGonder('${egitimId}',[${k.tid}],this)">Gönder</button>` : ''}
-          </div>`).join('');
-    });
+            ${egitimId && katilmayanIdler.length ? `
+              <button class="btn btn-primary btn-sm" onclick="takvimKatilmayanlaraGonder('${egitimId}',${JSON.stringify(katilmayanIdler)},this)">
+                📨 Hepsine Gönder
+              </button>` : ''}
+          </div>
+          ${katilmayanlar.length ? katilmayanlar.map(k => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+              <div>
+                <span style="font-size:13px;font-weight:600">${k.ad}</span>
+                <span style="font-size:12px;color:var(--muted);margin-left:6px">${k.gorev}</span>
+              </div>
+              ${egitimId ? `<button class="btn btn-dark btn-sm" onclick="takvimKatilmayanlaraGonder('${egitimId}',[${k.tid}],this)">Gönder</button>` : ''}
+            </div>`).join('') : '<div style="color:var(--green);font-size:13px">✅ Tüm çalışanlar aldı!</div>'}
+        </div>
+      </div>`;
+  };
+
+  if (_takvimEgitimIdCache[egitimAdi]) {
+    renderDetay(_takvimEgitimIdCache[egitimAdi]);
+  } else {
+    fetch('/panel/api/egitimler').then(r=>r.json()).then(liste => {
+      const eg = liste.find(e => e.baslik === egitimAdi);
+      _takvimEgitimIdCache[egitimAdi] = eg ? eg.id : '';
+      renderDetay(_takvimEgitimIdCache[egitimAdi]);
+    }).catch(() => renderDetay(''));
   }
 }
 
@@ -3884,59 +3964,86 @@ def api_toplu_egitim_gonder():
 
 @app.route("/panel/api/egitim-takvim")
 def api_egitim_takvim():
-    """Bugün / yarın eğitim bilgisi + son 30 gün katılım özeti."""
+    """Bugün/yarın bilgisi + EĞİTİM BAZLI katılım özeti (tarih fark etmez)."""
     if not session.get("panel_giris"): return jsonify({}), 401
     firma_id = request.args.get("firma_id", "varsayilan")
     try:
         from durum import sonraki_egitim_bilgisi
         from sheets import tum_kayitlar_getir
         from calisanlar import tum_calisanlar
-        from datetime import date, timedelta
 
         bilgi = sonraki_egitim_bilgisi()
         calisanlar = tum_calisanlar(firma_id)
         toplam_calisan = len(calisanlar)
-
-        # Son 30 günün eğitim geçmişi
         kayitlar = tum_kayitlar_getir(firma_id)
-        gecmis = {}
-        for k in kayitlar:
-            tarih = k.get("tarih", "")
-            egitim = k.get("egitim_konusu", "")
-            if not tarih or not egitim:
-                continue
-            anahtar = f"{tarih}|{egitim}"
-            if anahtar not in gecmis:
-                gecmis[anahtar] = {"tarih": tarih, "egitim": egitim, "toplam": 0, "gecti": 0, "katilmayan_idler": list(calisanlar.keys())}
-            gecmis[anahtar]["toplam"] += 1
-            if k.get("durum", "") in ("GECTI", "GECTİ"):
-                gecmis[anahtar]["gecti"] += 1
-            tid = str(k.get("telegram_id", ""))
-            try:
-                gecmis[anahtar]["katilmayan_idler"] = [x for x in gecmis[anahtar]["katilmayan_idler"] if str(x) != tid]
-            except: pass
 
-        # Katılmayan kişi bilgilerini ekle
+        # EĞİTİM BAZLI gruplama (tarih fark etmez)
+        egitim_ozet = {}
+        for k in kayitlar:
+            egitim_adi = k.get("egitim_konusu", "")
+            tarih = k.get("tarih", "")
+            if not egitim_adi:
+                continue
+            if egitim_adi not in egitim_ozet:
+                egitim_ozet[egitim_adi] = {
+                    "egitim": egitim_adi,
+                    "kisi_detay": {},      # tid → {ad, gorev, deneme_sayisi, gecti, tarihler}
+                    "toplam_giris": 0,
+                    "gecti_sayisi": 0,
+                    "son_tarih": ""
+                }
+            oz = egitim_ozet[egitim_adi]
+            oz["toplam_giris"] += 1
+            if k.get("durum", "") in ("GECTI", "GECTİ"):
+                oz["gecti_sayisi"] += 1
+            if tarih > oz["son_tarih"]:
+                oz["son_tarih"] = tarih
+
+            # Kişi bazında detay
+            tid_str = str(k.get("telegram_id", ""))
+            if tid_str and tid_str != "0":
+                if tid_str not in oz["kisi_detay"]:
+                    c = calisanlar.get(int(tid_str) if tid_str.isdigit() else tid_str, {})
+                    oz["kisi_detay"][tid_str] = {
+                        "tid": tid_str,
+                        "ad": c.get("ad_soyad", "?") if c else "?",
+                        "gorev": c.get("gorev", "") if c else "",
+                        "deneme_sayisi": 0,
+                        "gecti": False,
+                        "tarihler": []
+                    }
+                oz["kisi_detay"][tid_str]["deneme_sayisi"] += 1
+                if k.get("durum", "") in ("GECTI", "GECTİ"):
+                    oz["kisi_detay"][tid_str]["gecti"] = True
+                if tarih and tarih not in oz["kisi_detay"][tid_str]["tarihler"]:
+                    oz["kisi_detay"][tid_str]["tarihler"].append(tarih)
+
+        # Alan tid setleri
         gecmis_liste = []
-        for v in sorted(gecmis.values(), key=lambda x: x["tarih"], reverse=True)[:30]:
+        for egitim_adi, oz in sorted(egitim_ozet.items(),
+                                      key=lambda x: x[1]["son_tarih"], reverse=True):
+            alan_tidler = set(oz["kisi_detay"].keys())
             katilmayanlar = []
-            for tid in v.get("katilmayan_idler", []):
-                c = calisanlar.get(tid, {})
-                if c:
-                    katilmayanlar.append({"tid": tid, "ad": c.get("ad_soyad", "?"), "gorev": c.get("gorev", "")})
+            for tid, c in calisanlar.items():
+                if str(tid) not in alan_tidler:
+                    katilmayanlar.append({"tid": str(tid), "ad": c.get("ad_soyad","?"), "gorev": c.get("gorev","")})
+
             gecmis_liste.append({
-                "tarih": v["tarih"],
-                "egitim": v["egitim"],
-                "katilan": v["toplam"],
-                "gecti": v["gecti"],
+                "egitim": egitim_adi,
+                "son_tarih": oz["son_tarih"],
+                "alan_kisi": len(alan_tidler),
+                "toplam_giris": oz["toplam_giris"],
+                "gecti_sayisi": oz["gecti_sayisi"],
                 "toplam_calisan": toplam_calisan,
                 "katilmayan_sayisi": len(katilmayanlar),
-                "katilmayanlar": katilmayanlar
+                "katilmayanlar": katilmayanlar,
+                "alanlar": list(oz["kisi_detay"].values())
             })
 
         return jsonify({"ozet": bilgi, "gecmis": gecmis_liste, "toplam_calisan": toplam_calisan})
     except Exception as e:
         logger.error(f"egitim-takvim hatasi: {e}")
+        import traceback; logger.error(traceback.format_exc())
         return jsonify({"hata": str(e), "ozet": {}, "gecmis": []})
 
 
