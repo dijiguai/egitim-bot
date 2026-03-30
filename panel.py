@@ -267,15 +267,58 @@ textarea.form-input{min-height:80px;resize:vertical}
 
   <!-- EĞİTİMLER -->
   <div class="tab-content" id="tab-egitimler">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-      <div>
-        <div class="section-title" style="margin:0">Mevcut Eğitimler</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">Telegram'da: <code style="background:#f0ede8;padding:2px 6px;border-radius:4px">/egitim_gonder [kod]</code></div>
-      </div>
-      <button class="btn btn-dark btn-sm" onclick="manuelEgitimModalAc()">📝 Manuel Ekle</button>
-      <button class="btn btn-ai" onclick="aiModalAc()">✨ Yapay Zeka ile Üret</button>
+    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border)">
+      <div class="egitim-alt-tab egitim-alt-aktif" onclick="egitimAltSekme('liste',this)" style="padding:8px 14px;font-size:13px;color:var(--text);cursor:pointer;border-bottom:2px solid var(--accent);font-weight:500">📚 Eğitimler</div>
+      <div class="egitim-alt-tab" onclick="egitimAltSekme('takvim',this)" style="padding:8px 14px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;font-weight:500">📅 Takvim & Sıra</div>
     </div>
-    <div id="egitim-liste"><div class="loading"><div class="spinner"></div></div></div>
+
+    <div id="egitim-panel-liste">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="section-title" style="margin:0">Mevcut Eğitimler</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Telegram'da: <code style="background:#f0ede8;padding:2px 6px;border-radius:4px">/egitim_gonder [kod]</code></div>
+        </div>
+        <button class="btn btn-dark btn-sm" onclick="manuelEgitimModalAc()">📝 Manuel Ekle</button>
+        <button class="btn btn-ai" onclick="aiModalAc()">✨ Yapay Zeka ile Üret</button>
+      </div>
+      <div id="egitim-liste"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <div id="egitim-panel-takvim" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+        <div style="background:var(--card);border:2px solid var(--accent);border-radius:14px;padding:20px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📅 Bugünün Eğitimi</div>
+          <div id="takvim-bugun-baslik" style="font-family:Syne,sans-serif;font-weight:700;font-size:15px">—</div>
+          <div id="takvim-bugun-meta" style="font-size:12px;color:var(--muted);margin-top:4px"></div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">⏭️ Yarının Eğitimi</div>
+          <div id="takvim-sonraki-baslik" style="font-family:Syne,sans-serif;font-weight:700;font-size:15px">—</div>
+          <div style="margin-top:10px">
+            <select id="takvim-sonraki-sec" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--text);outline:none">
+              <option value="">Yarın için eğitim seç...</option>
+            </select>
+            <button class="btn btn-dark btn-sm" style="width:100%;margin-top:6px" onclick="takvimSonrakiKaydet()">Yarını Değiştir</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-family:Syne,sans-serif;font-weight:700;font-size:14px">🔢 Gönderim Sırası</div>
+          <div style="font-size:12px;color:var(--muted)">Sayıyı değiştirip Enter'a basın</div>
+        </div>
+        <div id="takvim-sira-liste"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-family:Syne,sans-serif;font-weight:700;font-size:14px">📊 Son Eğitim Geçmişi</div>
+          <button class="btn btn-dark btn-sm" onclick="takvimYukle()">🔄 Yenile</button>
+        </div>
+        <div id="takvim-gecmis-liste"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+    </div>
   </div>
 
   <!-- DAVETLER -->
@@ -706,7 +749,7 @@ function sekme(ad, el) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+ad).classList.add('active');
   el.classList.add('active');
-  document.getElementById('filtre-bar').style.display = (ad==='calisanlar'||ad==='egitimler') ? 'none' : 'flex';
+  document.getElementById('filtre-bar').style.display = (ad==='kayitlar'||ad==='istatistik'||ad==='mesajlar') ? 'flex' : 'none';
   if(ad==='calisanlar') calisanListesiYukle();
   if(ad==='egitimler') egitimListesiYukle();
   if(ad==='mesajlar') mesajLogYukle();
@@ -2323,30 +2366,219 @@ async function topluEgitimGonder(btn) {
 // ── ISG Modülü — sekme açılınca HTML'i yükle ─────────────────
 let _isgYuklendi = false;
 async function isgUzmanlariYukle() {
-  if (_isgYuklendi) return;
+  if (_isgYuklendi) {
+    // Zaten yüklendi, sadece uzman listesini tazele
+    if (typeof window._isgUzmanListele === 'function') window._isgUzmanListele();
+    return;
+  }
+  const tab = document.getElementById('tab-isg');
   const kap = document.getElementById('isg-yukleniyor');
   try {
     const r = await fetch('/panel/isg/html');
-    if (!r.ok) throw new Error('ISG modülü yanıt vermedi');
+    if (!r.ok) throw new Error('ISG modülü yanıt vermedi (' + r.status + ')');
     const html = await r.text();
-    const tab = document.getElementById('tab-isg');
-    if (tab) tab.innerHTML = html;
-    _isgYuklendi = true;
-    // Yüklenen script'leri çalıştır
-    tab.querySelectorAll('script').forEach(s => {
-      const yeni = document.createElement('script');
-      yeni.textContent = s.textContent;
-      document.body.appendChild(yeni);
+    // innerHTML ile ekle — script tagları çalışmaz, ayrıca eval et
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    // Script dışı içeriği ekle
+    const scriptler = [];
+    doc.querySelectorAll('script').forEach(s => {
+      scriptler.push(s.textContent);
+      s.remove();
     });
-    // İlk yüklemede uzmanları getir
-    if (typeof isgUzmanlariYukle === 'function') {
-      setTimeout(() => {
-        const ilkTab = document.querySelector('.isg-alt-tab');
-        if (ilkTab) ilkTab.click();
-      }, 100);
+    tab.innerHTML = doc.body.innerHTML;
+    // Script'leri sırayla çalıştır
+    for (const kod of scriptler) {
+      try { eval(kod); } catch(e2) { console.warn('ISG script hatası:', e2); }
+    }
+    _isgYuklendi = true;
+    // İlk alt sekmeyi aç
+    setTimeout(() => {
+      const ilkTab = document.querySelector('.isg-alt-tab');
+      if (ilkTab) ilkTab.click();
+    }, 150);
+  } catch(e) {
+    if (tab) tab.innerHTML = '<div class="empty" style="padding:60px"><div class="empty-icon">⚠️</div>ISG modülü yüklenemedi: ' + e.message + '<br><small style="color:var(--muted)">isg/ klasörünün repoya eklendiğini ve deploy yapıldığını kontrol edin.</small></div>';
+  }
+}
+
+
+// ── Eğitim Alt Sekme ──────────────────────────────────────────
+function egitimAltSekme(ad, el) {
+  document.getElementById('egitim-panel-liste').style.display = ad === 'liste' ? 'block' : 'none';
+  document.getElementById('egitim-panel-takvim').style.display = ad === 'takvim' ? 'block' : 'none';
+  document.querySelectorAll('.egitim-alt-tab').forEach(t => {
+    t.style.borderBottomColor = 'transparent';
+    t.style.color = 'var(--muted)';
+  });
+  el.style.borderBottomColor = 'var(--accent)';
+  el.style.color = 'var(--text)';
+  if (ad === 'takvim') takvimYukle();
+}
+
+// ── Takvim & Sıra ─────────────────────────────────────────────
+async function takvimYukle() {
+  const firmaId = aktifFirma || 'varsayilan';
+  try {
+    const r = await fetch(`/panel/api/egitim-takvim?firma_id=${firmaId}`);
+    const d = await r.json();
+
+    // Bugün / Yarın kartları
+    const ozet = d.ozet || {};
+    document.getElementById('takvim-bugun-baslik').textContent = ozet.bugun_baslik || '—';
+    document.getElementById('takvim-bugun-meta').textContent =
+      ozet.bugun_baslik ? `${ozet.mevcut_index || '?'}/${ozet.toplam || '?'}. eğitim · ${ozet.son_tarih || ''}` : '';
+    document.getElementById('takvim-sonraki-baslik').textContent = ozet.sonraki_baslik || '—';
+
+    // Yarın seçim dropdown
+    const r2 = await fetch('/panel/api/egitim-sira-listesi');
+    const sirali = await r2.json();
+    const selSon = document.getElementById('takvim-sonraki-sec');
+    selSon.innerHTML = '<option value="">Yarın için eğitim seç...</option>' +
+      sirali.map(e => `<option value="${e.id}" ${e.id === ozet.sonraki_id ? 'selected' : ''}>${e.sira}. ${e.baslik}</option>`).join('');
+
+    // Sıra listesi
+    const siraEl = document.getElementById('takvim-sira-liste');
+    if (!sirali.length) {
+      siraEl.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>Eğitim yok</div>';
+    } else {
+      siraEl.innerHTML = sirali.map(e => `
+        <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <input type="number" value="${e.sira}" min="1" max="999"
+            style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:13px;text-align:center;outline:none"
+            onchange="takvimSiraGuncelle('${e.id}', this.value, this)"
+            onkeydown="if(event.key==='Enter')takvimSiraGuncelle('${e.id}',this.value,this)">
+          <span style="font-size:13px;flex:1">${e.baslik}</span>
+          ${e.id === ozet.bugun_id ? '<span style="font-size:11px;background:#e85c2e22;color:var(--accent);padding:2px 8px;border-radius:20px;font-weight:600">Bugün</span>' : ''}
+          ${e.id === ozet.sonraki_id ? '<span style="font-size:11px;background:#27a86e22;color:var(--green);padding:2px 8px;border-radius:20px;font-weight:600">Yarın</span>' : ''}
+        </div>`).join('');
+    }
+
+    // Geçmiş
+    const gecmisEl = document.getElementById('takvim-gecmis-liste');
+    const gecmis = d.gecmis || [];
+    if (!gecmis.length) {
+      gecmisEl.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Henüz kayıt yok</div>';
+    } else {
+      gecmisEl.innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>Tarih</th><th>Eğitim</th><th>Katılan</th><th>Geçti</th><th>Katılmayan</th><th></th></tr></thead>
+        <tbody>` +
+        gecmis.map(g => {
+          const katOran = g.toplam_calisan ? Math.round(g.katilan / g.toplam_calisan * 100) : 0;
+          return `<tr>
+            <td style="font-size:12px;white-space:nowrap">${g.tarih}</td>
+            <td style="font-size:13px">${g.egitim}</td>
+            <td><span style="color:var(--accent);font-weight:600">${g.katilan}</span><span style="color:var(--muted);font-size:11px">/${g.toplam_calisan}</span></td>
+            <td><span style="color:var(--green);font-weight:600">${g.gecti}</span></td>
+            <td>${g.katilmayan_sayisi > 0
+              ? `<button class="btn btn-dark btn-sm" onclick="takvimKatilmayanGoster('${g.tarih}','${g.egitim.replace(/'/g,"\\'")}',this)" data-idler='${JSON.stringify(g.katilmayanlar)}'>${g.katilmayan_sayisi} kişi ▼</button>`
+              : '<span style="color:var(--green);font-size:12px">✅ Tamamı</span>'
+            }</td>
+            <td></td>
+          </tr>
+          <tr id="katilmayan-detay-${g.tarih.replace(/\./g,'-')}" style="display:none">
+            <td colspan="6" style="padding:0">
+              <div style="padding:12px 16px;background:var(--bg)">
+                <div id="katilmayan-icerik-${g.tarih.replace(/\./g,'-')}"></div>
+              </div>
+            </td>
+          </tr>`;
+        }).join('') + '</tbody></table></div>';
     }
   } catch(e) {
-    if (kap) kap.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>ISG modülü yüklenemedi: ' + e.message + '</div>';
+    document.getElementById('takvim-gecmis-liste').innerHTML =
+      '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi: ' + e.message + '</div>';
+  }
+}
+
+async function takvimSiraGuncelle(egitimId, yeniSira, el) {
+  try {
+    const r = await fetch('/panel/api/egitim-sira-guncelle', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({egitim_id: egitimId, sira: parseInt(yeniSira)})
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      el.style.borderColor = 'var(--green)';
+      setTimeout(() => { el.style.borderColor = ''; takvimYukle(); }, 800);
+    } else {
+      el.style.borderColor = 'var(--red)';
+    }
+  } catch(e) { el.style.borderColor = 'var(--red)'; }
+}
+
+async function takvimSonrakiKaydet() {
+  const egitimId = document.getElementById('takvim-sonraki-sec').value;
+  if (!egitimId) { alert('Bir eğitim seçin'); return; }
+  const r = await fetch('/panel/api/sonraki-egitim-sec', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({egitim_id: egitimId})
+  });
+  const d = await r.json();
+  if (d.basarili) {
+    const sel = document.getElementById('takvim-sonraki-sec');
+    const secilenAd = sel.options[sel.selectedIndex]?.text || '';
+    document.getElementById('takvim-sonraki-baslik').textContent = secilenAd.replace(/^\d+\.\s*/, '');
+    document.getElementById('takvim-sonraki-baslik').style.color = 'var(--green)';
+    setTimeout(() => document.getElementById('takvim-sonraki-baslik').style.color = '', 1500);
+  } else {
+    alert('Hata: ' + (d.hata || 'Bilinmeyen'));
+  }
+}
+
+function takvimKatilmayanGoster(tarih, egitim, btn) {
+  const tarihId = tarih.replace(/\./g, '-');
+  const detaySatir = document.getElementById('katilmayan-detay-' + tarihId);
+  const icerikEl = document.getElementById('katilmayan-icerik-' + tarihId);
+  if (!detaySatir) return;
+
+  const acik = detaySatir.style.display !== 'none';
+  detaySatir.style.display = acik ? 'none' : 'table-row';
+  btn.textContent = acik ? btn.textContent.replace('▲','▼') : btn.textContent.replace('▼','▲');
+
+  if (!acik && icerikEl) {
+    const kisiler = JSON.parse(btn.getAttribute('data-idler') || '[]');
+    // Eğitim ID'sini bul
+    fetch('/panel/api/egitimler').then(r => r.json()).then(egitimler => {
+      const eg = egitimler.find(e => e.baslik === egitim);
+      const egitimId = eg ? eg.id : '';
+      icerikEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600">${tarih} · ${egitim} · Katılmayanlar</div>
+          ${egitimId ? `<button class="btn btn-primary btn-sm" onclick="takvimKatilmayanlaraGonder('${egitimId}', ${JSON.stringify(kisiler.map(k=>k.tid))}, this)">📨 Hepsine Gönder</button>` : ''}
+        </div>` +
+        kisiler.map(k => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+            <div>
+              <span style="font-size:13px;font-weight:600">${k.ad}</span>
+              <span style="font-size:12px;color:var(--muted);margin-left:8px">${k.gorev}</span>
+            </div>
+            ${egitimId ? `<button class="btn btn-dark btn-sm" onclick="takvimKatilmayanlaraGonder('${egitimId}',[${k.tid}],this)">Gönder</button>` : ''}
+          </div>`).join('');
+    });
+  }
+}
+
+async function takvimKatilmayanlaraGonder(egitimId, idler, btn) {
+  const orijinal = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/panel/api/toplu-egitim-katilmayana', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({egitim_id: egitimId, telegram_idler: idler})
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      btn.textContent = '✅ Gönderildi';
+      btn.style.background = 'var(--green)';
+    } else {
+      btn.textContent = '❌ Hata';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    btn.textContent = orijinal;
+    btn.disabled = false;
   }
 }
 
@@ -3648,6 +3880,153 @@ def api_toplu_egitim_gonder():
     except Exception as e:
         logger.error(f"Toplu egitim gönderim hatası: {e}")
         return jsonify({"basarili": False, "hata": str(e)})
+
+
+@app.route("/panel/api/egitim-takvim")
+def api_egitim_takvim():
+    """Bugün / yarın eğitim bilgisi + son 30 gün katılım özeti."""
+    if not session.get("panel_giris"): return jsonify({}), 401
+    firma_id = request.args.get("firma_id", "varsayilan")
+    try:
+        from durum import sonraki_egitim_bilgisi
+        from sheets import tum_kayitlar_getir
+        from calisanlar import tum_calisanlar
+        from datetime import date, timedelta
+
+        bilgi = sonraki_egitim_bilgisi()
+        calisanlar = tum_calisanlar(firma_id)
+        toplam_calisan = len(calisanlar)
+
+        # Son 30 günün eğitim geçmişi
+        kayitlar = tum_kayitlar_getir(firma_id)
+        gecmis = {}
+        for k in kayitlar:
+            tarih = k.get("tarih", "")
+            egitim = k.get("egitim_konusu", "")
+            if not tarih or not egitim:
+                continue
+            anahtar = f"{tarih}|{egitim}"
+            if anahtar not in gecmis:
+                gecmis[anahtar] = {"tarih": tarih, "egitim": egitim, "toplam": 0, "gecti": 0, "katilmayan_idler": list(calisanlar.keys())}
+            gecmis[anahtar]["toplam"] += 1
+            if k.get("durum", "") in ("GECTI", "GECTİ"):
+                gecmis[anahtar]["gecti"] += 1
+            tid = str(k.get("telegram_id", ""))
+            try:
+                gecmis[anahtar]["katilmayan_idler"] = [x for x in gecmis[anahtar]["katilmayan_idler"] if str(x) != tid]
+            except: pass
+
+        # Katılmayan kişi bilgilerini ekle
+        gecmis_liste = []
+        for v in sorted(gecmis.values(), key=lambda x: x["tarih"], reverse=True)[:30]:
+            katilmayanlar = []
+            for tid in v.get("katilmayan_idler", []):
+                c = calisanlar.get(tid, {})
+                if c:
+                    katilmayanlar.append({"tid": tid, "ad": c.get("ad_soyad", "?"), "gorev": c.get("gorev", "")})
+            gecmis_liste.append({
+                "tarih": v["tarih"],
+                "egitim": v["egitim"],
+                "katilan": v["toplam"],
+                "gecti": v["gecti"],
+                "toplam_calisan": toplam_calisan,
+                "katilmayan_sayisi": len(katilmayanlar),
+                "katilmayanlar": katilmayanlar
+            })
+
+        return jsonify({"ozet": bilgi, "gecmis": gecmis_liste, "toplam_calisan": toplam_calisan})
+    except Exception as e:
+        logger.error(f"egitim-takvim hatasi: {e}")
+        return jsonify({"hata": str(e), "ozet": {}, "gecmis": []})
+
+
+@app.route("/panel/api/egitim-sira-listesi")
+def api_egitim_sira_listesi():
+    """Eğitimlerin gönderim sırasını döner."""
+    if not session.get("panel_giris"): return jsonify([]), 401
+    try:
+        from egitimler_sheets import egitimler_sirali_liste
+        return jsonify([{"sira": s, "id": eid, "baslik": b} for s, eid, b in egitimler_sirali_liste()])
+    except Exception as e:
+        return jsonify([])
+
+
+@app.route("/panel/api/egitim-sira-guncelle", methods=["POST"])
+def api_egitim_sira_guncelle():
+    """Eğitim sırasını günceller."""
+    if not session.get("panel_giris"): return jsonify({"basarili": False}), 401
+    veri = request.get_json() or {}
+    egitim_id = veri.get("egitim_id", "")
+    yeni_sira = veri.get("sira", 0)
+    try:
+        from egitimler_sheets import egitim_sira_guncelle
+        ok = egitim_sira_guncelle(egitim_id, int(yeni_sira))
+        return jsonify({"basarili": ok})
+    except Exception as e:
+        return jsonify({"basarili": False, "hata": str(e)})
+
+
+@app.route("/panel/api/sonraki-egitim-sec", methods=["POST"])
+def api_sonraki_egitim_sec():
+    """Admin yarının eğitimini manuel seçer."""
+    if not session.get("panel_giris"): return jsonify({"basarili": False}), 401
+    veri = request.get_json() or {}
+    egitim_id = veri.get("egitim_id", "")
+    try:
+        from durum import sonraki_egitim_sec
+        ok = sonraki_egitim_sec(egitim_id)
+        return jsonify({"basarili": ok})
+    except Exception as e:
+        return jsonify({"basarili": False, "hata": str(e)})
+
+
+@app.route("/panel/api/toplu-egitim-katilmayana", methods=["POST"])
+def api_toplu_egitim_katilmayana():
+    """Belirli kişilere (katılmayanlara) eğitim gönder."""
+    if not session.get("panel_giris"): return jsonify({"basarili": False}), 401
+    veri = request.get_json() or {}
+    egitim_id = veri.get("egitim_id", "")
+    telegram_idler = veri.get("telegram_idler", [])
+
+    if not egitim_id or not telegram_idler:
+        return jsonify({"basarili": False, "hata": "egitim_id ve telegram_idler zorunlu"})
+
+    egitim = EGITIMLER.get(egitim_id)
+    if not egitim:
+        # Sheets'ten dene
+        try:
+            from egitimler_sheets import tum_egitimler
+            egitim = tum_egitimler().get(egitim_id)
+        except: pass
+    if not egitim:
+        return jsonify({"basarili": False, "hata": "Eğitim bulunamadı"})
+
+    import requests as req_lib, time as t_lib
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    base = f"https://api.telegram.org/bot{token}"
+    keyboard = {"inline_keyboard": [[{"text": "▶️ Eğitime Başla", "callback_data": f"egitim_baslat:{egitim_id}"}]]}
+
+    from calisanlar import tum_calisanlar
+    calisanlar = tum_calisanlar()
+    gonderilen = 0
+
+    for tid in telegram_idler:
+        try:
+            tid_int = int(tid)
+            c = calisanlar.get(tid_int, {})
+            ad = c.get("ad_soyad", "").split()[0] if c.get("ad_soyad") else "Merhaba"
+            req_lib.post(f"{base}/sendMessage", json={
+                "chat_id": tid_int,
+                "text": f"📋 *{ad}*, bugünün eğitimini henüz tamamlamadınız.\n\n*{egitim['baslik']}* eğitimine katılmak için 👇",
+                "parse_mode": "Markdown",
+                "reply_markup": keyboard
+            }, timeout=10)
+            gonderilen += 1
+            t_lib.sleep(0.1)
+        except Exception as e:
+            logger.warning(f"Katılmayan gönderim hatası (tid={tid}): {e}")
+
+    return jsonify({"basarili": True, "mesaj": f"{gonderilen} kişiye gönderildi."})
 
 @app.route("/panel/ekle-calisan")
 def ekle_calisan_redirect():
