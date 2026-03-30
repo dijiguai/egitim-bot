@@ -1,5 +1,6 @@
 """
-Egitim sirasi, izin, aktif egitim ve deneme hakki yonetimi
+Egitim sirasi, izin, aktif egitim ve deneme hakki yonetimi.
+Tüm kalıcı durum Sheets'te tutulur — durum.json sadece cache.
 """
 
 import json, os, logging
@@ -17,13 +18,9 @@ def _oku() -> dict:
         except:
             pass
     return {
-        "egitim_index": 0,
-        "son_tarih": "",
-        "izinler": {},
-        "tamamlananlar": {},
-        "aktif": None,
-        "bugun_tamamlayanlar": {},
-        "gunluk_haklar": {}   # { "tarih": { "user_id": { "kalan": 1, "deneme": 0 } } }
+        "egitim_index": 0, "son_tarih": "", "izinler": {},
+        "tamamlananlar": {}, "aktif": None,
+        "bugun_tamamlayanlar": {}, "gunluk_haklar": {}
     }
 
 
@@ -36,13 +33,9 @@ def _bugun():
     return date.today().strftime("%d.%m.%Y")
 
 
-# ── DENEME HAKKI ────────────────────────────────────────────
+# ── DENEME HAKKI ────────────────────────────────────────────────
 
 def deneme_hakki_al(user_id: int) -> dict:
-    """
-    Bugunun deneme durumunu dondur.
-    { kalan: int, deneme: int }
-    """
     d = _oku()
     bugun = _bugun()
     haklar = d.setdefault("gunluk_haklar", {}).setdefault(bugun, {})
@@ -54,7 +47,6 @@ def deneme_hakki_al(user_id: int) -> dict:
 
 
 def deneme_kullan(user_id: int):
-    """Bir deneme hakki kullan."""
     d = _oku()
     bugun = _bugun()
     haklar = d.setdefault("gunluk_haklar", {}).setdefault(bugun, {})
@@ -67,7 +59,6 @@ def deneme_kullan(user_id: int):
 
 
 def ekstra_hak_ver(user_id: int):
-    """Admin 1 ekstra deneme hakki verir."""
     d = _oku()
     bugun = _bugun()
     haklar = d.setdefault("gunluk_haklar", {}).setdefault(bugun, {})
@@ -80,92 +71,153 @@ def ekstra_hak_ver(user_id: int):
 
 
 def hak_var_mi(user_id: int) -> bool:
-    """Bugün hak kaldi mi?"""
     return deneme_hakki_al(user_id)["kalan"] > 0
 
 
 def kacinci_deneme(user_id: int) -> int:
-    """Kacinci denemede oldugunu dondur."""
     return deneme_hakki_al(user_id).get("deneme", 0) + 1
 
 
-# ── EGITIM SIRASI ──────────────────────────────────────────
+# ── EĞİTİM SIRASI — Sheets tabanlı ──────────────────────────────
 
-def _sheets_index_oku() -> dict:
-    """Sheets'ten egitim_index ve son_tarih oku."""
+def _ayarlar_oku() -> dict:
     try:
         from sheets import _servis
         s, sid = _servis()
-        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:D20").execute()
-        satirlar = r.get("values", [])
+        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B30").execute()
         ayarlar = {}
-        for satir in satirlar:
+        for satir in r.get("values", []):
             if len(satir) >= 2:
-                ayarlar[satir[0]] = satir[1]
+                ayarlar[satir[0].strip()] = satir[1].strip()
         return ayarlar
-    except:
+    except Exception as e:
+        logger.warning(f"Ayarlar okunamadi: {e}")
         return {}
 
 
-def _sheets_index_yaz(egitim_index: int, son_tarih: str):
-    """Sheets'e egitim_index ve son_tarih yaz."""
+def _ayar_yaz(anahtar: str, deger: str):
     try:
         from sheets import _servis
         s, sid = _servis()
-        # Ayarlar sekmesi yoksa olustur
+        # Sekme varsa güncelle
         try:
-            s.values().get(spreadsheetId=sid, range="Ayarlar!A1").execute()
+            r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B30").execute()
+            for i, satir in enumerate(r.get("values", [])):
+                if satir and satir[0].strip() == anahtar:
+                    s.values().update(spreadsheetId=sid,
+                        range=f"Ayarlar!A{i+1}:B{i+1}",
+                        valueInputOption="RAW",
+                        body={"values": [[anahtar, deger]]}).execute()
+                    return
         except:
-            s.batchUpdate(spreadsheetId=sid, body={
-                "requests": [{"addSheet": {"properties": {"title": "Ayarlar"}}}]
-            }).execute()
-        s.values().update(
-            spreadsheetId=sid, range="Ayarlar!A1:B2",
-            valueInputOption="RAW",
-            body={"values": [
-                ["egitim_index", str(egitim_index)],
-                ["son_tarih", son_tarih]
-            ]}
-        ).execute()
+            pass
+        # Yoksa append
+        s.values().append(spreadsheetId=sid, range="Ayarlar!A1",
+            valueInputOption="RAW", insertDataOption="INSERT_ROWS",
+            body={"values": [[anahtar, deger]]}).execute()
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"Sheets index yazma hatasi: {e}")
+        logger.warning(f"Ayar yazma hatasi ({anahtar}): {e}")
 
 
 def siradaki_egitim_al():
-    from config import EGITIMLER
-    liste = list(EGITIMLER.keys())
-    if not liste:
+    """
+    Bugün için eğitim seç.
+    - Bugün zaten seçildiyse aynısını döndür
+    - Yeni günse bir sonrakini seç (sıralı, döngüsel)
+    - Sıra Sheets'te 'Egitimler' sekmesinin 'sira' sütununa göre
+    """
+    from egitimler_sheets import tum_egitimler
+    egitimler = tum_egitimler(sirali=True)  # sıra sütununa göre sıralı
+
+    if not egitimler:
+        logger.error("Egitim listesi bos!")
         return None, None
+
+    liste = list(egitimler.keys())   # sıralı key listesi
     bugun = _bugun()
 
-    # Once Sheets'ten oku, yoksa durum.json'a bak
-    ayarlar = _sheets_index_oku()
-    son_tarih = ayarlar.get("son_tarih") or _oku().get("son_tarih", "")
-    egitim_index = int(ayarlar.get("egitim_index", _oku().get("egitim_index", 0)))
+    # Sheets + json'dan mevcut durumu al
+    ayarlar = _ayarlar_oku()
+    son_tarih     = ayarlar.get("son_tarih") or _oku().get("son_tarih", "")
+    egitim_index  = int(ayarlar.get("egitim_index", _oku().get("egitim_index", 0)))
 
     if son_tarih == bugun:
-        # Bugun zaten secildi - ayni egitimi dondur
+        # Bugün zaten seçildi — aynısını döndür
         idx = (egitim_index - 1) % len(liste)
         eid = liste[idx]
-        return eid, EGITIMLER[eid]
+        return eid, egitimler.get(eid)
 
-    # Yeni gun - siradaki egitimi sec
+    # Yeni gün — sıradakini seç
     idx = egitim_index % len(liste)
     eid = liste[idx]
-    yeni_index = (idx + 1) % len(liste)
+    yeni_index = (idx + 1) % len(liste)   # döngüsel: son eğitim bittikten sonra başa döner
 
-    # Hem Sheets'e hem durum.json'a yaz
-    _sheets_index_yaz(yeni_index, bugun)
+    # Sheets ve json'a yaz
+    _ayar_yaz("egitim_index", str(yeni_index))
+    _ayar_yaz("son_tarih", bugun)
     d = _oku()
     d["egitim_index"] = yeni_index
     d["son_tarih"] = bugun
     _yaz(d)
 
-    return eid, EGITIMLER[eid]
+    logger.info(f"Bugünün eğitimi seçildi: {eid} (index={idx}, yarınki={yeni_index})")
+    return eid, egitimler.get(eid)
 
 
-# ── AKTIF EGITIM ───────────────────────────────────────────
+def sonraki_egitim_bilgisi() -> dict:
+    """
+    Panel için: bugünün ve yarının eğitimini döndür.
+    Returns: { bugun_id, bugun_baslik, sonraki_id, sonraki_baslik, toplam, mevcut_index }
+    """
+    from egitimler_sheets import tum_egitimler
+    egitimler = tum_egitimler(sirali=True)
+    if not egitimler:
+        return {}
+
+    liste = list(egitimler.keys())
+    toplam = len(liste)
+    ayarlar = _ayarlar_oku()
+    son_tarih    = ayarlar.get("son_tarih", "")
+    egitim_index = int(ayarlar.get("egitim_index", 0))
+    bugun = _bugun()
+
+    # Bugünün eğitimi
+    if son_tarih == bugun:
+        bugun_idx = (egitim_index - 1) % toplam
+    else:
+        bugun_idx = egitim_index % toplam
+
+    sonraki_idx = (bugun_idx + 1) % toplam
+
+    bugun_eid    = liste[bugun_idx]
+    sonraki_eid  = liste[sonraki_idx]
+
+    return {
+        "bugun_id":       bugun_eid,
+        "bugun_baslik":   egitimler[bugun_eid].get("baslik", ""),
+        "sonraki_id":     sonraki_eid,
+        "sonraki_baslik": egitimler[sonraki_eid].get("baslik", ""),
+        "toplam":         toplam,
+        "mevcut_index":   bugun_idx + 1,  # 1-tabanlı
+        "son_tarih":      son_tarih,
+    }
+
+
+def sonraki_egitim_sec(egitim_id: str) -> bool:
+    """Admin yarının eğitimini manuel seçer."""
+    from egitimler_sheets import tum_egitimler
+    egitimler = tum_egitimler(sirali=True)
+    liste = list(egitimler.keys())
+    if egitim_id not in liste:
+        return False
+    # Seçilen eğitim yarın gönderilecek: index = seçilenin konumu
+    idx = liste.index(egitim_id)
+    _ayar_yaz("egitim_index", str(idx))
+    logger.info(f"Yarının eğitimi manuel seçildi: {egitim_id} (index={idx})")
+    return True
+
+
+# ── AKTİF EĞİTİM ────────────────────────────────────────────────
 
 def aktif_egitim_set(egitim_id: str, grup_mesaj_id: int = None):
     d = _oku()
@@ -176,18 +228,9 @@ def aktif_egitim_set(egitim_id: str, grup_mesaj_id: int = None):
         "acik": True
     }
     _yaz(d)
-    # Sheets'e de yaz (deploy kaliciligi icin)
     try:
-        from sheets import _servis
-        s, sid = _servis()
-        s.values().update(
-            spreadsheetId=sid, range="Ayarlar!A3:B4",
-            valueInputOption="RAW",
-            body={"values": [
-                ["aktif_egitim_id", egitim_id],
-                ["aktif_egitim_tarih", _bugun()]
-            ]}
-        ).execute()
+        _ayar_yaz("aktif_egitim_id", egitim_id)
+        _ayar_yaz("aktif_egitim_tarih", _bugun())
     except:
         pass
 
@@ -195,11 +238,10 @@ def aktif_egitim_set(egitim_id: str, grup_mesaj_id: int = None):
 def aktif_egitim_al() -> dict:
     d = _oku()
     aktif = d.get("aktif")
-    # durum.json bossa Sheets'ten oku
     if not aktif or not aktif.get("egitim_id"):
         try:
-            ayarlar = _sheets_index_oku()
-            eid = ayarlar.get("aktif_egitim_id")
+            ayarlar = _ayarlar_oku()
+            eid   = ayarlar.get("aktif_egitim_id")
             tarih = ayarlar.get("aktif_egitim_tarih")
             if eid and tarih:
                 aktif = {"egitim_id": eid, "tarih": tarih, "acik": tarih == _bugun()}
@@ -207,7 +249,7 @@ def aktif_egitim_al() -> dict:
                 _yaz(d)
         except:
             pass
-    return aktif
+    return aktif or {}
 
 
 def aktif_egitim_temizle():
@@ -218,22 +260,16 @@ def aktif_egitim_temizle():
 
 
 def egitim_acik_mi() -> bool:
-    """
-    Bugun egitim acik mi? durum.json bossa Sheets'ten kontrol et.
-    Deploy sonrasi tekrar egitim gonderilmesini onler.
-    """
     bugun = _bugun()
     d = _oku()
     aktif = d.get("aktif")
     if aktif and aktif.get("tarih") == bugun:
         return aktif.get("acik", False)
-    # json bos - Sheets'ten bak
     try:
-        ayarlar = _sheets_index_oku()
-        eid = ayarlar.get("aktif_egitim_id")
+        ayarlar = _ayarlar_oku()
+        eid   = ayarlar.get("aktif_egitim_id")
         tarih = ayarlar.get("aktif_egitim_tarih")
         if eid and tarih == bugun:
-            # Bugun zaten egitim gonderilmis, acik say
             d["aktif"] = {"egitim_id": eid, "tarih": tarih, "acik": True}
             _yaz(d)
             return True
@@ -243,34 +279,25 @@ def egitim_acik_mi() -> bool:
 
 
 def gunun_egitim_id() -> str:
-    """
-    Bugunun aktif egitim ID'sini dondur.
-    Once durum.json'a bak, bossa Sheets'ten oku.
-    Deploy sonrasi json sifirlaninca Sheets'ten geri yukler.
-    """
     bugun = _bugun()
-    # 1. durum.json'a bak
     d = _oku()
     aktif = d.get("aktif")
     if aktif and aktif.get("tarih") == bugun and aktif.get("egitim_id"):
-        return aktif.get("egitim_id")
-    # 2. Sheets'ten oku (deploy sonrasi json silinmis olabilir)
+        return aktif["egitim_id"]
     try:
-        ayarlar = _sheets_index_oku()
-        eid = ayarlar.get("aktif_egitim_id")
+        ayarlar = _ayarlar_oku()
+        eid   = ayarlar.get("aktif_egitim_id")
         tarih = ayarlar.get("aktif_egitim_tarih")
         if eid and tarih == bugun:
-            # json'a geri yaz
             d["aktif"] = {"egitim_id": eid, "tarih": tarih, "acik": True}
             _yaz(d)
-            logger.info(f"Aktif egitim Sheets'ten yuklendi: {eid}")
             return eid
     except Exception as e:
-        logger.warning(f"Sheets'ten egitim id okunamadi: {e}")
+        logger.warning(f"Sheets'ten egitim id alinamadi: {e}")
     return None
 
 
-# ── TAMAMLAMA ──────────────────────────────────────────────
+# ── TAMAMLAMA ────────────────────────────────────────────────────
 
 def bugun_tamamlandi_kaydet(user_id: int):
     d = _oku()
@@ -286,7 +313,6 @@ def bugun_tamamlayanlar(tarih: str) -> list:
 
 
 def tamamlandi_kaydet(user_id: int, egitim_id: str):
-    """Tamamlanan egitimi hem durum.json'a hem bugun listesine kaydet."""
     d = _oku()
     k = str(user_id)
     d.setdefault("tamamlananlar", {}).setdefault(k, [])
@@ -297,40 +323,30 @@ def tamamlandi_kaydet(user_id: int, egitim_id: str):
 
 
 def eksik_egitimler(user_id: int) -> list:
-    from config import EGITIMLER
+    from egitimler_sheets import tum_egitimler
+    egitimler = tum_egitimler()
     tamamlananlar = tamamlanan_egitimler(user_id)
-    return [e for e in EGITIMLER.keys() if e not in tamamlananlar]
+    return [e for e in egitimler.keys() if e not in tamamlananlar]
 
 
 def tamamlanan_egitimler(user_id: int) -> list:
-    """
-    Sheets kayitlarindan gecilen egitimleri hesapla.
-    durum.json'daki listeyle birlestir (her ikisine de bak).
-    """
-    from config import EGITIMLER
+    from egitimler_sheets import tum_egitimler
+    EGITIMLER = tum_egitimler()
     gecilen = set()
-
-    # 1. Sheets'ten oku — GECTI olan kayitlara bak
     try:
         from sheets import tum_kayitlar_getir
-        kayitlar = tum_kayitlar_getir()
-        for k in kayitlar:
-            if str(k.get("telegram_id","")) == str(user_id):
-                if k.get("durum","") in ("GECTI","GECTİ"):
-                    # Egitim konusundan ID bul
-                    konu = k.get("egitim_konusu","")
+        for k in tum_kayitlar_getir():
+            if str(k.get("telegram_id", "")) == str(user_id):
+                if k.get("durum", "") in ("GECTI", "GECTİ"):
+                    konu = k.get("egitim_konusu", "")
                     for eid, e in EGITIMLER.items():
-                        if e.get("baslik","") == konu:
+                        if e.get("baslik", "") == konu:
                             gecilen.add(eid)
                             break
     except Exception as e:
         logger.warning(f"Sheets tamamlanan okuma hatasi: {e}")
-
-    # 2. durum.json'daki listeyle birlestir
     d = _oku()
-    json_liste = d.get("tamamlananlar", {}).get(str(user_id), [])
-    gecilen.update(json_liste)
-
+    gecilen.update(d.get("tamamlananlar", {}).get(str(user_id), []))
     return list(gecilen)
 
 
@@ -344,7 +360,7 @@ def tekrar_izni_ver(user_id: int, egitim_id: str):
         _yaz(d)
 
 
-# ── IZIN ───────────────────────────────────────────────────
+# ── İZİN ─────────────────────────────────────────────────────────
 
 def izin_ekle(user_id: int, tarih: str):
     d = _oku()
@@ -363,5 +379,6 @@ def izin_kaldir(user_id: int, tarih: str):
     _yaz(d)
 
 
-def izinli_mi(user_id: int, tarih: str) -> bool:
+def izinli_mi(user_id: int, tarih: str = None) -> bool:
+    tarih = tarih or _bugun()
     return tarih in _oku().get("izinler", {}).get(str(user_id), [])
