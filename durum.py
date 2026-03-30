@@ -204,16 +204,25 @@ def sonraki_egitim_bilgisi() -> dict:
 
 
 def sonraki_egitim_sec(egitim_id: str) -> bool:
-    """Admin yarının eğitimini manuel seçer."""
+    """
+    Admin yarının eğitimini manuel seçer.
+    egitim_index = seçilen eğitimin konumu (yarın bu index'ten başlanır)
+    son_tarih sıfırlanmaz — bugünün eğitimi değişmez, sadece yarın etki eder.
+    """
     from egitimler_sheets import tum_egitimler
     egitimler = tum_egitimler(sirali=True)
     liste = list(egitimler.keys())
     if egitim_id not in liste:
+        logger.warning(f"sonraki_egitim_sec: '{egitim_id}' listede yok")
         return False
-    # Seçilen eğitim yarın gönderilecek: index = seçilenin konumu
     idx = liste.index(egitim_id)
+    # egitim_index = yarın gönderilecek eğitimin index'i
     _ayar_yaz("egitim_index", str(idx))
-    logger.info(f"Yarının eğitimi manuel seçildi: {egitim_id} (index={idx})")
+    # json'ı da güncelle
+    d = _oku()
+    d["egitim_index"] = idx
+    _yaz(d)
+    logger.info(f"Yarının eğitimi seçildi: {egitim_id} (index={idx}, baslik={egitimler[egitim_id].get('baslik','')})")
     return True
 
 
