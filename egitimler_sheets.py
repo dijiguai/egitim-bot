@@ -1,6 +1,6 @@
 """
 Egitim yonetimi - Google Sheets "Egitimler" sekmesi
-Her egitim bir satir: id | baslik | tur | sure | metin | sorular_json
+Her egitim bir satir: id | baslik | tur | sure | metin | sorular_json | firmalar | sira
 """
 
 import json, logging, os
@@ -10,52 +10,57 @@ from googleapiclient.discovery import build
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SEKME = "Egitimler"
-SUTUNLAR = ["id", "baslik", "tur", "sure", "metin", "sorular_json", "firmalar"]
+# sira: eğitim gönderim sırası (1,2,3...), boşsa pozisyon sırası kullanılır
+SUTUNLAR = ["id", "baslik", "tur", "sure", "metin", "sorular_json", "firmalar", "sira"]
 
-_cache = None  # Bellekte tutuyoruz, her istekte Sheets'e gitmeyelim
+_cache = None
 
 
 def _get_credentials():
-    creds_json = __import__('os').environ.get("GOOGLE_CREDENTIALS_JSON")
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if creds_json:
         try:
-            import json as _json
-            info = _json.loads(creds_json)
-            return Credentials.from_service_account_info(info, scopes=SCOPES)
+            return Credentials.from_service_account_info(json.loads(creds_json), scopes=SCOPES)
         except Exception as e:
             pass
-    creds_path = __import__('os').environ.get("GOOGLE_CREDENTIALS_PATH", "credentials.json")
-    if __import__('os').path.exists(creds_path):
+    creds_path = os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials.json")
+    if os.path.exists(creds_path):
         return Credentials.from_service_account_file(creds_path, scopes=SCOPES)
     raise ValueError("Google credentials bulunamadi!")
+
 
 def _servis():
     creds = _get_credentials()
     s = build("sheets", "v4", credentials=creds).spreadsheets()
-    sid = __import__('os').environ.get("SPREADSHEET_ID")
+    sid = os.environ.get("SPREADSHEET_ID")
     return s, sid
 
 
 def _baslik_kontrol():
     try:
         s, sid = _servis()
-        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A1:F1").execute()
-        if not r.get("values"):
+        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A1:H1").execute()
+        degerler = r.get("values", [[]])[0] if r.get("values") else []
+        if not degerler:
             s.values().update(spreadsheetId=sid, range=f"{SEKME}!A1",
                 valueInputOption="RAW", body={"values": [SUTUNLAR]}).execute()
-            logger.info("Egitimler sekmesi baslik eklendi")
+        elif len(degerler) < 8:
+            # Eski format — sira sütunu ekle
+            s.values().update(spreadsheetId=sid, range=f"{SEKME}!H1",
+                valueInputOption="RAW", body={"values": [["sira"]]}).execute()
+            logger.info("Egitimler: sira sutunu eklendi")
     except Exception as e:
         logger.warning(f"Baslik kontrol: {e}")
 
 
-def tum_egitimler() -> dict:
-    """Sheets'ten { egitim_id: {...} } dict dondur."""
+def tum_egitimler(sirali=True) -> dict:
+    """Sheets'ten { egitim_id: {...} } dict döndür. sirali=True ise sıra alanına göre."""
     global _cache
     try:
         s, sid = _servis()
-        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:F").execute()
+        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:H").execute()
         satirlar = r.get("values", [])
-        egitimler = {}
+        egitimler_liste = []
         for satir in satirlar:
             if len(satir) < 2:
                 continue
@@ -67,14 +72,26 @@ def tum_egitimler() -> dict:
             except:
                 sorular = []
             firmalar_str = satir[6] if len(satir) > 6 else ""
-            egitimler[eid] = {
+            sira_str = satir[7] if len(satir) > 7 else ""
+            try:
+                sira = int(sira_str) if sira_str.strip() else 9999
+            except:
+                sira = 9999
+
+            egitimler_liste.append((sira, eid, {
                 "baslik":   satir[1] if len(satir) > 1 else "",
                 "tur":      satir[2] if len(satir) > 2 else "",
                 "sure":     satir[3] if len(satir) > 3 else "",
                 "metin":    satir[4] if len(satir) > 4 else "",
                 "sorular":  sorular,
-                "firmalar": [f.strip() for f in firmalar_str.split(",") if f.strip()] if firmalar_str else []
-            }
+                "firmalar": [f.strip() for f in firmalar_str.split(",") if f.strip()] if firmalar_str else [],
+                "sira":     sira
+            }))
+
+        if sirali:
+            egitimler_liste.sort(key=lambda x: x[0])
+
+        egitimler = {eid: e for _, eid, e in egitimler_liste}
         _cache = egitimler
         return egitimler
     except Exception as e:
@@ -82,35 +99,58 @@ def tum_egitimler() -> dict:
         return _cache or {}
 
 
-def egitim_ekle(eid: str, baslik: str, tur: str, sure: str, metin: str, sorular: list, firmalar: list = None):
+def egitim_ekle(eid: str, baslik: str, tur: str, sure: str, metin: str,
+                sorular: list, firmalar: list = None, sira: int = None):
     _baslik_kontrol()
     s, sid = _servis()
     firmalar_str = ",".join(firmalar) if firmalar else ""
-    deger = [[eid, baslik, tur, sure, metin, json.dumps(sorular, ensure_ascii=False), firmalar_str]]
+    # Sıra belirlenmemişse en sona ekle
+    if sira is None:
+        mevcut = tum_egitimler(sirali=True)
+        siralar = [e.get("sira", 0) for e in mevcut.values() if e.get("sira", 9999) < 9999]
+        sira = (max(siralar) + 1) if siralar else 1
+    deger = [[eid, baslik, tur, sure, metin, json.dumps(sorular, ensure_ascii=False), firmalar_str, str(sira)]]
     s.values().append(spreadsheetId=sid, range=f"{SEKME}!A1",
         valueInputOption="RAW", insertDataOption="INSERT_ROWS",
         body={"values": deger}).execute()
-    logger.info(f"Egitim eklendi: {eid}")
+    logger.info(f"Egitim eklendi: {eid} (sira={sira})")
     tum_egitimler()  # cache yenile
 
 
-def egitim_guncelle(eid: str, baslik: str = None, tur: str = None, sure: str = None):
-    """Baslik/tur/sure guncelle (metin ve sorular degismez)."""
+def egitim_sira_guncelle(eid: str, yeni_sira: int) -> bool:
+    """Eğitimin gönderim sırasını günceller."""
     try:
         s, sid = _servis()
-        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:F").execute()
-        satirlar = r.get("values", [])
-        for i, satir in enumerate(satirlar):
+        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:H").execute()
+        for i, satir in enumerate(r.get("values", [])):
             if satir and satir[0].strip() == eid:
                 satir_no = i + 2
-                mevcut = list(satir) + [""] * (6 - len(satir))
+                mevcut = list(satir) + [""] * (8 - len(satir))
+                mevcut[7] = str(yeni_sira)
+                s.values().update(spreadsheetId=sid, range=f"{SEKME}!A{satir_no}",
+                    valueInputOption="RAW", body={"values": [mevcut]}).execute()
+                global _cache
+                _cache = None
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Sira guncelleme hatasi: {e}")
+        return False
+
+
+def egitim_guncelle(eid: str, baslik: str = None, tur: str = None, sure: str = None):
+    try:
+        s, sid = _servis()
+        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:H").execute()
+        for i, satir in enumerate(r.get("values", [])):
+            if satir and satir[0].strip() == eid:
+                satir_no = i + 2
+                mevcut = list(satir) + [""] * (8 - len(satir))
                 if baslik: mevcut[1] = baslik
                 if tur:    mevcut[2] = tur
                 if sure:   mevcut[3] = sure
-                s.values().update(spreadsheetId=sid,
-                    range=f"{SEKME}!A{satir_no}",
-                    valueInputOption="RAW",
-                    body={"values": [mevcut[:6]]}).execute()
+                s.values().update(spreadsheetId=sid, range=f"{SEKME}!A{satir_no}",
+                    valueInputOption="RAW", body={"values": [mevcut]}).execute()
                 tum_egitimler()
                 return True
         return False
@@ -120,16 +160,14 @@ def egitim_guncelle(eid: str, baslik: str = None, tur: str = None, sure: str = N
 
 
 def egitim_sil(eid: str) -> bool:
-    """Egitimi sil (satiri temizle)."""
     try:
         s, sid = _servis()
         r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:A").execute()
         for i, satir in enumerate(r.get("values", [])):
             if satir and satir[0].strip() == eid:
                 satir_no = i + 2
-                # Satiri bos yap
                 s.values().clear(spreadsheetId=sid,
-                    range=f"{SEKME}!A{satir_no}:F{satir_no}").execute()
+                    range=f"{SEKME}!A{satir_no}:H{satir_no}").execute()
                 tum_egitimler()
                 logger.info(f"Egitim silindi: {eid}")
                 return True
@@ -139,29 +177,25 @@ def egitim_sil(eid: str) -> bool:
         return False
 
 
-def egitim_guncelle_tam(eid: str, baslik=None, tur=None, sure=None, metin=None, sorular=None, firmalar=None):
-    """Tum alanlari guncelle."""
+def egitim_guncelle_tam(eid: str, baslik=None, tur=None, sure=None,
+                         metin=None, sorular=None, firmalar=None, sira=None):
     try:
         s, sid = _servis()
-        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:F").execute()
-        satirlar = r.get("values", [])
-        for i, satir in enumerate(satirlar):
+        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:H").execute()
+        for i, satir in enumerate(r.get("values", [])):
             if satir and satir[0].strip() == eid:
                 satir_no = i + 2
-                mevcut = list(satir) + [""] * (6 - len(satir))
-                if baslik  is not None: mevcut[1] = baslik
-                if tur     is not None: mevcut[2] = tur
-                if sure    is not None: mevcut[3] = sure
-                if metin   is not None: mevcut[4] = metin
+                mevcut = list(satir) + [""] * (8 - len(satir))
+                if baslik   is not None: mevcut[1] = baslik
+                if tur      is not None: mevcut[2] = tur
+                if sure     is not None: mevcut[3] = sure
+                if metin    is not None: mevcut[4] = metin
                 if sorular  is not None: mevcut[5] = json.dumps(sorular, ensure_ascii=False)
-                if firmalar is not None: 
-                    while len(mevcut) < 7: mevcut.append("")
-                    mevcut[6] = ",".join(firmalar)
-                s.values().update(spreadsheetId=sid,
-                    range=f"{SEKME}!A{satir_no}",
-                    valueInputOption="RAW",
-                    body={"values": [mevcut[:6]]}).execute()
-                tum_egitimler()  # cache yenile
+                if firmalar is not None: mevcut[6] = ",".join(firmalar)
+                if sira     is not None: mevcut[7] = str(sira)
+                s.values().update(spreadsheetId=sid, range=f"{SEKME}!A{satir_no}",
+                    valueInputOption="RAW", body={"values": [mevcut]}).execute()
+                tum_egitimler()
                 return True
         return False
     except Exception as e:
@@ -170,29 +204,26 @@ def egitim_guncelle_tam(eid: str, baslik=None, tur=None, sure=None, metin=None, 
 
 
 def tum_egitimler_firma(firma_id: str) -> dict:
-    """Belirli bir firmaya ait egitimleri dondur.
-    firmalar alani bos ise tum firmalara ait demektir."""
     tum = tum_egitimler()
-    sonuc = {}
-    for eid, e in tum.items():
-        firmalar = e.get("firmalar", [])
-        if not firmalar or firma_id in firmalar:
-            sonuc[eid] = e
-    return sonuc
+    return {eid: e for eid, e in tum.items()
+            if not e.get("firmalar") or firma_id in e.get("firmalar", [])}
+
+
+def egitimler_sirali_liste() -> list:
+    """Sıra numarasına göre sıralı [(sira, eid, baslik)] listesi."""
+    egitimler = tum_egitimler(sirali=True)
+    return [(e.get("sira", idx+1), eid, e.get("baslik", ""))
+            for idx, (eid, e) in enumerate(egitimler.items())]
 
 
 def config_egitimlerini_sheets_e_yukle(config_egitimler: dict):
-    """
-    Ilk kurulumda config.py'deki egitimler Sheets'e aktarilir.
-    Zaten varsa atlanir.
-    """
     _baslik_kontrol()
     mevcut = tum_egitimler()
     eklenen = 0
-    for eid, e in config_egitimler.items():
+    for idx, (eid, e) in enumerate(config_egitimler.items()):
         if eid not in mevcut:
             egitim_ekle(eid, e["baslik"], e["tur"], e["sure"],
-                        e["metin"], e["sorular"])
+                        e["metin"], e["sorular"], sira=idx+1)
             eklenen += 1
     logger.info(f"Config'den {eklenen} egitim Sheets'e yuklendi")
     return eklenen
