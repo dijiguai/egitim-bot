@@ -167,7 +167,10 @@ def siradaki_egitim_al():
 def sonraki_egitim_bilgisi() -> dict:
     """
     Panel için: bugünün ve yarının eğitimini döndür.
-    Returns: { bugun_id, bugun_baslik, sonraki_id, sonraki_baslik, toplam, mevcut_index }
+
+    egitim_index = YARINCA gönderilecek eğitimin index'i
+    Bugünün eğitimi = (egitim_index - 1) % toplam  [eğer bugün gönderildiyse]
+    Yarının eğitimi = egitim_index % toplam
     """
     from egitimler_sheets import tum_egitimler
     egitimler = tum_egitimler(sirali=True)
@@ -178,19 +181,21 @@ def sonraki_egitim_bilgisi() -> dict:
     toplam = len(liste)
     ayarlar = _ayarlar_oku()
     son_tarih    = ayarlar.get("son_tarih", "")
-    egitim_index = int(ayarlar.get("egitim_index", 0))
+    egitim_index = int(ayarlar.get("egitim_index", _oku().get("egitim_index", 0)))
     bugun = _bugun()
 
-    # Bugünün eğitimi
+    # Bugün gönderildi mi?
     if son_tarih == bugun:
-        bugun_idx = (egitim_index - 1) % toplam
+        # Bugün gönderildi → bugünün eğitimi = index-1
+        bugun_idx   = (egitim_index - 1) % toplam
+        sonraki_idx = egitim_index % toplam
     else:
-        bugun_idx = egitim_index % toplam
+        # Bugün henüz gönderilmedi → bugünün eğitimi = index (gönderilirse bu seçilir)
+        bugun_idx   = egitim_index % toplam
+        sonraki_idx = (egitim_index + 1) % toplam
 
-    sonraki_idx = (bugun_idx + 1) % toplam
-
-    bugun_eid    = liste[bugun_idx]
-    sonraki_eid  = liste[sonraki_idx]
+    bugun_eid   = liste[bugun_idx]
+    sonraki_eid = liste[sonraki_idx]
 
     return {
         "bugun_id":       bugun_eid,
@@ -198,8 +203,9 @@ def sonraki_egitim_bilgisi() -> dict:
         "sonraki_id":     sonraki_eid,
         "sonraki_baslik": egitimler[sonraki_eid].get("baslik", ""),
         "toplam":         toplam,
-        "mevcut_index":   bugun_idx + 1,  # 1-tabanlı
+        "mevcut_index":   bugun_idx + 1,
         "son_tarih":      son_tarih,
+        "bugun_gonderildi": son_tarih == bugun,
     }
 
 
