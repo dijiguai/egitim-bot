@@ -755,7 +755,7 @@ function sekme(ad, el) {
   if(ad==='mesajlar') mesajLogYukle();
   if(ad==='davetler') { davetListesiYukle(); davetAyarlariYukle(); }
   if(ad==='toplu-egitim') { topluEgitimFirmalariYukle(); }
-  if(ad==='isg') { isgUzmanlariYukle(); }
+  if(ad==='isg') { isgModulYukle(); }
 }
 
 // ── KAYITLAR ──────────────────────────────
@@ -2365,42 +2365,50 @@ async function topluEgitimGonder(btn) {
 
 // ── ISG Modülü — sekme açılınca HTML'i yükle ─────────────────
 let _isgYuklendi = false;
-async function isgUzmanlariYukle() {
+async function isgModulYukle() {
+  // tab-isg elementi firma seçilince DOM'a giriyor — güvenli şekilde bul
   const tab = document.getElementById('tab-isg');
-  if (_isgYuklendi) {
-    // Zaten yüklendi — ilk alt sekmeyi aç
-    const ilk = tab.querySelector('.isg-alt-tab');
-    if (ilk) { ilk.click(); } else { isgAltSekme('uzmanlar', tab.querySelector('.isg-alt-tab')); }
+  if (!tab) {
+    console.warn('ISG: tab-isg elementi bulunamadı');
     return;
   }
+
+  if (_isgYuklendi) {
+    // Zaten yüklendi — uzman listesini aç
+    const ilk = tab.querySelector('.isg-alt-tab');
+    if (ilk) ilk.click();
+    return;
+  }
+
   try {
     const r = await fetch('/panel/isg/html');
     if (!r.ok) throw new Error('HTTP ' + r.status + ' — isg/ klasörü repoda mı?');
     const html = await r.text();
-    // Sadece HTML yapısını yükle (JS zaten panel.py'de tanımlı)
+
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    doc.querySelectorAll('script').forEach(s => s.remove()); // script'lere gerek yok
-    // Style'ları head'e ekle
-    doc.querySelectorAll('style').forEach(s => {
-      if (!document.querySelector('style[data-isg]')) {
+    doc.querySelectorAll('script').forEach(s => s.remove());
+    // Style'ları head'e ekle (bir kez)
+    if (!document.querySelector('style[data-isg]')) {
+      doc.querySelectorAll('style').forEach(s => {
         const st = s.cloneNode(true);
-        st.setAttribute('data-isg','1');
+        st.setAttribute('data-isg', '1');
         document.head.appendChild(st);
-      }
-    });
+      });
+    }
+
     tab.innerHTML = doc.body.innerHTML;
     _isgYuklendi = true;
-    // İlk alt sekmeyi aç
+
     setTimeout(() => {
       const ilk = tab.querySelector('.isg-alt-tab');
       if (ilk) ilk.click();
     }, 50);
   } catch(e) {
-    if (tab) tab.innerHTML = `<div style="padding:60px;text-align:center;color:var(--muted)">
+    tab.innerHTML = `<div style="padding:60px;text-align:center;color:var(--muted)">
       <div style="font-size:40px;margin-bottom:12px">⚠️</div>
-      ISG modülü yüklenemedi: ${e.message}
-      <br><small style="color:var(--muted)">Coolify'da isg/ klasörü deploy edildi mi?</small>
+      <b>ISG modülü yüklenemedi:</b> ${e.message}
+      <br><br><small>isg/ klasörünün repoda olduğunu ve Coolify'da deploy edildiğini kontrol et.</small>
     </div>`;
   }
 }
@@ -2419,7 +2427,7 @@ function isgAltSekme(ad, el) {
   el.classList.add('active');
   el.style.color = 'var(--text)';
   el.style.borderBottomColor = 'var(--accent)';
-  if (ad === 'uzmanlar') isgUzmanlariYukle();
+  if (ad === 'uzmanlar') isgUzmanListesiYukle();
   if (ad === 'atamalar') { isgAtamalariYukle(); isgFirmalariYukle('isg-atama-firma-filtre'); }
   if (ad === 'firma-detay') isgFirmalariYukle('isg-detay-firma-sec');
   if (ad === 'audit') isgAuditYukle();
@@ -2427,7 +2435,7 @@ function isgAltSekme(ad, el) {
 
 // ── UZMANLAR ──────────────────────────────────────────────────
 
-async function isgUzmanlariYukle() {
+async function isgUzmanListesiYukle() {
   const el = document.getElementById('isg-uzman-liste');
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
@@ -2527,7 +2535,7 @@ async function isgUzmanKaydet() {
     const method = uzmanId ? 'PUT' : 'POST';
     const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(veri) });
     const d = await r.json();
-    if (d.basarili) { modalKapat('isg-uzman-modal'); isgUzmanlariYukle(); }
+    if (d.basarili) { modalKapat('isg-uzman-modal'); isgUzmanListesiYukle(); }
     else { hataEl.textContent = d.hata || 'Hata'; hataEl.style.display = 'block'; }
   } catch(e) { hataEl.textContent = 'Bağlantı hatası'; hataEl.style.display = 'block'; }
 }
@@ -2536,7 +2544,7 @@ async function isgUzmanPasif(uzmanId, ad) {
   if (!confirm(`"${ad}" pasife alınacak. Geçmiş kayıtlar korunur. Devam?`)) return;
   const r = await fetch(`/panel/isg/uzmanlar/${uzmanId}/pasif`, { method: 'POST' });
   const d = await r.json();
-  if (d.basarili) isgUzmanlariYukle();
+  if (d.basarili) isgUzmanListesiYukle();
   else alert('Hata: ' + (d.hata || ''));
 }
 
