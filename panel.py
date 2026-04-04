@@ -2474,6 +2474,8 @@ function isgAltSekme(ad, el) {
   if (ad === 'atamalar') { isgAtamalariYukle(); isgFirmalariYukle('isg-atama-firma-filtre'); }
   if (ad === 'firma-detay') isgFirmalariYukle('isg-detay-firma-sec');
   if (ad === 'audit') isgAuditYukle();
+  if (ad === 'sure-hesap') isgSureHesapBaslat();
+  if (ad === 'personel-rapor') prYukle();
 }
 
 // ── UZMANLAR ──────────────────────────────────────────────────
@@ -2778,6 +2780,290 @@ async function isgAuditYukle() {
   } catch(e) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>';
   }
+}
+
+// ── ISG Süre Hesaplama ─────────────────────────────────────────
+function isgSureHesapBaslat() {
+  // Mevcut firma_detay'dan tehlike sınıfı ve çalışan sayısı varsa doldur
+  const tehlikeEl = document.getElementById('sh-tehlike');
+  const calisanEl = document.getElementById('sh-calisan');
+  if (!tehlikeEl.value && aktifFirma) {
+    fetch('/panel/isg/firma-detay?firma_id=' + encodeURIComponent(aktifFirma))
+      .then(r => r.ok ? r.json() : {})
+      .then(d => {
+        if (d.tehlike_sinifi) tehlikeEl.value = d.tehlike_sinifi;
+        if (d.calisan_sayisi) calisanEl.value = d.calisan_sayisi;
+        // Atanmış uzman sınıfını bul
+        return fetch('/panel/isg/atamalar?firma_id=' + encodeURIComponent(aktifFirma));
+      })
+      .then(r => r && r.ok ? r.json() : [])
+      .then(atamalar => {
+        const aktif = (atamalar || []).find(a => !a.bitis_tarihi && a.tip === 'is_guvenligi_uzmani');
+        if (aktif && aktif.uzman_sinifi) {
+          document.getElementById('sh-uzman-sinif').value = aktif.uzman_sinifi;
+        }
+        shHesapla();
+      })
+      .catch(() => {});
+  }
+}
+
+function shHesapla() {
+  const calisan = parseInt(document.getElementById('sh-calisan').value) || 0;
+  const tehlike = document.getElementById('sh-tehlike').value;
+  const uzmanSinif = document.getElementById('sh-uzman-sinif').value;
+
+  const sonucEl = document.getElementById('sh-sonuc');
+  const bosEl = document.getElementById('sh-bos');
+
+  if (!calisan || !tehlike) {
+    sonucEl.style.display = 'none';
+    bosEl.style.display = 'block';
+    return;
+  }
+
+  // Eğitim süresi hesapla (client-side — hızlı önizleme)
+  const egitimSure = { 'Az Tehlikeli': 8, 'Tehlikeli': 12, 'Çok Tehlikeli': 16 };
+  const kisiBasiSaat = egitimSure[tehlike] || 0;
+  const toplamSaat = kisiBasiSaat * calisan;
+  const aylikSaat = (toplamSaat / 12).toFixed(1);
+
+  document.getElementById('sh-toplam-saat').textContent = toplamSaat;
+  document.getElementById('sh-aylik-saat').textContent = aylikSaat;
+  document.getElementById('sh-kisi-saat').textContent = kisiBasiSaat;
+  document.getElementById('sh-egitim-aciklama').textContent =
+    `${calisan} çalışan × ${kisiBasiSaat} saat = ${toplamSaat} saat/yıl`;
+
+  // Uzman süresi hesapla
+  const tamZamanliEl = document.getElementById('sh-tam-zamanli-badge');
+  const uzmanDkEl = document.getElementById('sh-uzman-dk');
+  const uzmanBirimEl = document.getElementById('sh-uzman-birim');
+  const uzmanAciklamaEl = document.getElementById('sh-uzman-aciklama');
+  const uzmanSaatRowEl = document.getElementById('sh-uzman-saat-row');
+  const uzmanSaatEl = document.getElementById('sh-uzman-saat');
+
+  let tamZamanli = false;
+  let aylikDk = 0;
+
+  if (tehlike === 'Az Tehlikeli') {
+    if (calisan > 1000) { tamZamanli = true; }
+    else { aylikDk = calisan * 10; }
+  } else if (tehlike === 'Tehlikeli') {
+    if (calisan > 500) { tamZamanli = true; }
+    else { aylikDk = Math.max(240, calisan * 15); }
+  } else if (tehlike === 'Çok Tehlikeli') {
+    if (calisan > 250) { tamZamanli = true; }
+    else { aylikDk = Math.max(240, calisan * 20); }
+  }
+
+  if (tamZamanli) {
+    tamZamanliEl.style.display = 'block';
+    uzmanDkEl.textContent = '—';
+    uzmanBirimEl.textContent = '';
+    uzmanAciklamaEl.textContent = 'Bu işyerinde tam zamanlı uzman bulundurulması zorunludur.';
+    uzmanSaatRowEl.style.display = 'none';
+  } else {
+    tamZamanliEl.style.display = 'none';
+    uzmanDkEl.textContent = aylikDk;
+    uzmanBirimEl.textContent = 'dk/ay';
+    uzmanAciklamaEl.textContent = `Yönetmelik Ek-1 hesabı`;
+    uzmanSaatRowEl.style.display = 'block';
+    uzmanSaatEl.textContent = (aylikDk / 60).toFixed(1);
+  }
+
+  // Uzman sınıfı uyumluluk kontrolü
+  const uyariEl = document.getElementById('sh-sinif-uyari');
+  if (uzmanSinif && uzmanSinif !== '') {
+    const yetki = {
+      'A': ['Az Tehlikeli', 'Tehlikeli', 'Çok Tehlikeli'],
+      'B': ['Az Tehlikeli', 'Tehlikeli'],
+      'C': ['Az Tehlikeli'],
+      '—': ['Az Tehlikeli', 'Tehlikeli', 'Çok Tehlikeli'],
+    };
+    const yeterli = (yetki[uzmanSinif] || []).includes(tehlike);
+    uyariEl.style.display = 'block';
+    if (yeterli) {
+      uyariEl.style.background = '#e8f7f0';
+      uyariEl.style.color = 'var(--green)';
+      uyariEl.style.border = '1px solid #b7e8d0';
+      uyariEl.textContent = `✅ ${uzmanSinif} sınıfı uzman bu işyeri için yetkilendirilmiştir.`;
+    } else {
+      uyariEl.style.background = '#fdecea';
+      uyariEl.style.color = 'var(--red)';
+      uyariEl.style.border = '1px solid #f5bcb8';
+      uyariEl.textContent = `⚠️ ${uzmanSinif} sınıfı uzman "${tehlike}" işyerinde görev yapamaz! Daha üst sınıf uzman atanmalıdır.`;
+    }
+  } else {
+    uyariEl.style.display = 'none';
+  }
+
+  bosEl.style.display = 'none';
+  sonucEl.style.display = 'block';
+}
+
+async function shKaydet() {
+  const calisan = parseInt(document.getElementById('sh-calisan').value) || 0;
+  const tehlike = document.getElementById('sh-tehlike').value;
+  const uzmanSinif = document.getElementById('sh-uzman-sinif').value;
+  if (!calisan || !tehlike || !aktifFirma) {
+    alert('Çalışan sayısı ve tehlike sınıfı zorunlu.');
+    return;
+  }
+  try {
+    const r = await fetch('/panel/isg/sure-hesap', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        firma_id: aktifFirma,
+        calisan_sayisi: calisan,
+        tehlike_sinifi: tehlike,
+        uzman_sinifi: uzmanSinif
+      })
+    });
+    const d = await r.json();
+    if (d.hata) { alert('Hata: ' + d.hata); return; }
+    // Aynı zamanda firma-detay'a calisan_sayisi yaz
+    await fetch('/panel/isg/firma-detay', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        firma_id: aktifFirma,
+        calisan_sayisi: calisan
+      })
+    });
+    alert('Süre hesabı kaydedildi.');
+  } catch(e) {
+    alert('Bağlantı hatası');
+  }
+}
+
+// ── Personel Eğitim Raporu ─────────────────────────────────────
+let _prVeri = null;
+
+async function prYukle() {
+  // Yıl seçeneğini doldur
+  const yilEl = document.getElementById('pr-yil');
+  if (!yilEl) return;
+  if (!yilEl.options.length) {
+    const buYil = new Date().getFullYear();
+    for (let y = buYil; y >= buYil - 3; y--) {
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = y;
+      yilEl.appendChild(opt);
+    }
+  }
+  const yil = yilEl.value || new Date().getFullYear();
+
+  if (!aktifFirma) {
+    document.getElementById('pr-bos').style.display = 'block';
+    document.getElementById('pr-bos').textContent = 'Önce bir firma seçin.';
+    return;
+  }
+
+  document.getElementById('pr-yukleniyor').style.display = 'block';
+  document.getElementById('pr-firma-ozet').style.display = 'none';
+  document.getElementById('pr-tablo-wrap').style.display = 'none';
+  document.getElementById('pr-bos').style.display = 'none';
+
+  try {
+    const r = await fetch(`/panel/isg/personel-rapor?firma_id=${encodeURIComponent(aktifFirma)}&yil=${yil}`);
+    const d = await r.json();
+    document.getElementById('pr-yukleniyor').style.display = 'none';
+
+    if (d.hata) {
+      document.getElementById('pr-bos').textContent = 'Hata: ' + d.hata;
+      document.getElementById('pr-bos').style.display = 'block';
+      return;
+    }
+
+    _prVeri = d;
+    prRenderBarChart(d);
+    prRenderTablo(d);
+
+    document.getElementById('pr-firma-ozet').style.display = d.aylar.length ? 'block' : 'none';
+    document.getElementById('pr-tablo-wrap').style.display = 'block';
+    if (!Object.keys(d.calisanlar).length) {
+      document.getElementById('pr-bos').textContent = `${yil} yılına ait eğitim kaydı bulunamadı.`;
+      document.getElementById('pr-bos').style.display = 'block';
+    }
+  } catch(e) {
+    document.getElementById('pr-yukleniyor').style.display = 'none';
+    document.getElementById('pr-bos').textContent = 'Bağlantı hatası';
+    document.getElementById('pr-bos').style.display = 'block';
+  }
+}
+
+function prRenderBarChart(d) {
+  const barEl = document.getElementById('pr-bar-chart');
+  const labelEl = document.getElementById('pr-bar-labels');
+  if (!d.aylar.length) return;
+
+  // Maksimum değeri bul
+  const maxSaat = Math.max(...d.aylar.map(ay => (d.firma_ozet[ay] || {}).toplam_saat || 0)) || 1;
+
+  barEl.innerHTML = d.aylar.map(ay => {
+    const oz = d.firma_ozet[ay] || {};
+    const saat = oz.toplam_saat || 0;
+    const h = Math.max(4, Math.round((saat / maxSaat) * 70));
+    return `<div title="${oz.ay_etiket}: ${saat} saat (${oz.calisan_sayisi} kişi)"
+      style="flex:1;height:${h}px;background:var(--accent);border-radius:4px 4px 0 0;cursor:default;min-width:20px;max-width:60px"></div>`;
+  }).join('');
+
+  labelEl.innerHTML = d.aylar.map(ay => {
+    const etiket = (d.ay_etiketleri[ay] || ay).split(' ')[0].slice(0, 3);
+    return `<div style="flex:1;font-size:10px;color:var(--muted);text-align:center;min-width:20px;max-width:60px">${etiket}</div>`;
+  }).join('');
+}
+
+function prRenderTablo(d) {
+  const thead = document.getElementById('pr-thead');
+  const tbody = document.getElementById('pr-tbody');
+  if (!thead || !tbody) return;
+
+  // Başlıklar
+  const ayBasliklari = d.aylar.map(ay =>
+    `<th style="font-size:11px;padding:8px 6px;text-align:center;white-space:nowrap">${(d.ay_etiketleri[ay]||ay).split(' ')[0].slice(0,3)}<br><span style="color:var(--muted)">${(d.ay_etiketleri[ay]||ay).split(' ')[1]||''}</span></th>`
+  ).join('');
+  thead.innerHTML = `<tr style="border-bottom:2px solid var(--border)">
+    <th style="font-size:11px;padding:8px;text-align:left">Çalışan</th>
+    <th style="font-size:11px;padding:8px;text-align:left">Görev</th>
+    ${ayBasliklari}
+    <th style="font-size:11px;padding:8px;text-align:center">Yıllık<br>Toplam</th>
+  </tr>`;
+
+  const calisanlar = Object.values(d.calisanlar).sort((a, b) =>
+    b.yillik_toplam_saat - a.yillik_toplam_saat
+  );
+
+  if (!calisanlar.length) {
+    tbody.innerHTML = `<tr><td colspan="${d.aylar.length + 3}" style="text-align:center;padding:30px;color:var(--muted)">Kayıt bulunamadı</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = calisanlar.map((c, i) => {
+    const aySutunlari = d.aylar.map(ay => {
+      const ayVeri = c.aylar[ay];
+      if (!ayVeri || !ayVeri.toplam_dk) {
+        return `<td style="text-align:center;font-size:12px;color:var(--muted);padding:8px 4px">—</td>`;
+      }
+      const saat = ayVeri.toplam_saat;
+      const detay = ayVeri.egitimler.map(e => `${e.konu}: ${e.sure_dk}dk`).join('\n');
+      return `<td title="${detay}" style="text-align:center;font-size:12px;padding:8px 4px;cursor:default">
+        <span style="background:var(--accent-light,#e8f0fe);color:var(--accent);border-radius:6px;padding:2px 8px;font-weight:600">${saat}s</span>
+      </td>`;
+    }).join('');
+
+    const yillikRenk = c.yillik_toplam_saat > 0 ? 'var(--green)' : 'var(--muted)';
+    return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--bg)'}">
+      <td style="padding:8px;font-size:13px;font-weight:500">${c.ad_soyad}</td>
+      <td style="padding:8px;font-size:12px;color:var(--muted)">${c.gorev||'—'}</td>
+      ${aySutunlari}
+      <td style="text-align:center;padding:8px">
+        <span style="font-weight:700;font-size:13px;color:${yillikRenk}">${c.yillik_toplam_saat}s</span>
+        <div style="font-size:10px;color:var(--muted)">${c.egitim_sayisi} eğitim</div>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 
