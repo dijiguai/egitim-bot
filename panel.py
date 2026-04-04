@@ -518,6 +518,29 @@ textarea.form-input{min-height:80px;resize:vertical}
         Grup ID'sini bulmak için gruba <code>@userinfobot</code>'u ekleyin veya Railway loglarından öğrenin.
       </div>
     </div>
+    <!-- ISG BİLGİLERİ -->
+    <div style="border-top:1px solid var(--border);margin:16px 0 14px;padding-top:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">🛡️ ISG Bilgileri (Opsiyonel)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">SGK Sicil No</label>
+          <input type="text" class="form-input" id="f-sgk-no" placeholder="örn: 012345678901234">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">NACE Kodu</label>
+          <input type="text" class="form-input" id="f-nace-kodu" placeholder="örn: 23.51">
+        </div>
+        <div class="form-group" style="margin-bottom:0;grid-column:1/-1">
+          <label class="form-label">Tehlike Sınıfı</label>
+          <select class="form-input" id="f-tehlike-sinifi">
+            <option value="">Seçilmedi</option>
+            <option value="Az Tehlikeli">🟢 Az Tehlikeli</option>
+            <option value="Tehlikeli">🟡 Tehlikeli</option>
+            <option value="Çok Tehlikeli">🔴 Çok Tehlikeli</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div id="f-hata" class="alert alert-red" style="display:none"></div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn btn-primary" style="flex:1" onclick="firmaKaydet()">Kaydet</button>
@@ -840,9 +863,20 @@ Not: Sheets'teki veriler silinmez, sadece listeden çıkarılır.`)) return;
 function firmaDuzenle(firma_id, ad, grup_id) {
   document.getElementById('f-ad').value = ad;
   document.getElementById('f-grupid').value = grup_id || '';
+  document.getElementById('f-sgk-no').value = '';
+  document.getElementById('f-nace-kodu').value = '';
+  document.getElementById('f-tehlike-sinifi').value = '';
   document.getElementById('f-hata').style.display = 'none';
   // Modal basligini degistir
   document.querySelector('#firma-ekle-modal .modal-title').textContent = 'Firmayı Düzenle';
+  // ISG bilgilerini çek ve doldur
+  fetch('/panel/isg/firma-detay?firma_id=' + encodeURIComponent(firma_id))
+    .then(r => r.ok ? r.json() : {})
+    .then(d => {
+      if(d.sgk_no) document.getElementById('f-sgk-no').value = d.sgk_no;
+      if(d.nace_kodu) document.getElementById('f-nace-kodu').value = d.nace_kodu;
+      if(d.tehlike_sinifi) document.getElementById('f-tehlike-sinifi').value = d.tehlike_sinifi;
+    }).catch(()=>{});
   // Kaydet butonunu guncelle
   const btn = document.querySelector('#firma-ekle-modal .btn-primary');
   btn.onclick = () => firmaGuncelle(firma_id);
@@ -852,13 +886,16 @@ function firmaDuzenle(firma_id, ad, grup_id) {
 async function firmaGuncelle(firma_id) {
   const ad = document.getElementById('f-ad').value.trim();
   const grup_id = document.getElementById('f-grupid').value.trim();
+  const sgk_no = (document.getElementById('f-sgk-no')||{}).value?.trim() || '';
+  const nace_kodu = (document.getElementById('f-nace-kodu')||{}).value?.trim() || '';
+  const tehlike_sinifi = (document.getElementById('f-tehlike-sinifi')||{}).value || '';
   const hataEl = document.getElementById('f-hata');
   if(!ad) { hataEl.textContent='Firma adı zorunlu'; hataEl.style.display='block'; return; }
 
   try {
     const r = await fetch('/panel/api/firma-guncelle', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({firma_id, ad, grup_id})
+      body: JSON.stringify({firma_id, ad, grup_id, sgk_no, nace_kodu, tehlike_sinifi})
     });
     const d = await r.json();
     if(d.basarili) {
@@ -989,6 +1026,9 @@ function anaSeyfayaDon() {
 function firmaEkleModalAc() {
   document.getElementById('f-ad').value = '';
   document.getElementById('f-grupid').value = '';
+  document.getElementById('f-sgk-no').value = '';
+  document.getElementById('f-nace-kodu').value = '';
+  document.getElementById('f-tehlike-sinifi').value = '';
   document.getElementById('f-hata').style.display = 'none';
   // Baslik ve butonu sifirla (duzenle modundan geliyorsa)
   document.querySelector('#firma-ekle-modal .modal-title').textContent = 'Yeni Firma Ekle';
@@ -1000,6 +1040,9 @@ function firmaEkleModalAc() {
 async function firmaKaydet() {
   const ad = document.getElementById('f-ad').value.trim();
   const grupid = document.getElementById('f-grupid').value.trim();
+  const sgk_no = (document.getElementById('f-sgk-no')||{}).value?.trim() || '';
+  const nace_kodu = (document.getElementById('f-nace-kodu')||{}).value?.trim() || '';
+  const tehlike_sinifi = (document.getElementById('f-tehlike-sinifi')||{}).value || '';
   const hataEl = document.getElementById('f-hata');
   if(!ad || !grupid) {
     hataEl.textContent = 'Tüm alanları doldurun.';
@@ -1009,7 +1052,7 @@ async function firmaKaydet() {
   try {
     const r = await fetch('/panel/api/firma-ekle', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ad, grup_id: grupid})
+      body: JSON.stringify({ad, grup_id: grupid, sgk_no, nace_kodu, tehlike_sinifi})
     });
     const d = await r.json();
     if(d.basarili) {
@@ -3842,6 +3885,9 @@ def api_firma_guncelle():
     firma_id = veri.get("firma_id","").strip()
     ad = veri.get("ad","").strip()
     grup_id_str = str(veri.get("grup_id","")).strip()
+    sgk_no = veri.get("sgk_no","").strip()
+    nace_kodu = veri.get("nace_kodu","").strip()
+    tehlike_sinifi = veri.get("tehlike_sinifi","").strip()
     if not firma_id or not ad:
         return jsonify({"basarili":False,"hata":"Eksik bilgi"})
     try:
@@ -3858,6 +3904,13 @@ def api_firma_guncelle():
                 s.values().update(spreadsheetId=sid, range=f"{FIRMALAR_SEKME}!A{satir_no}",
                     valueInputOption="RAW", body={"values":[mevcut[:6]]}).execute()
                 tum_firmalar(force=True)
+                # ISG detaylarını kaydet (sgk/nace/tehlike doluysa)
+                if sgk_no or nace_kodu or tehlike_sinifi:
+                    try:
+                        from isg.firma_detay import firma_detay_kaydet
+                        firma_detay_kaydet(firma_id, sgk_no, nace_kodu, tehlike_sinifi, yapan="panel")
+                    except Exception as isg_e:
+                        logger.warning(f"ISG detay kaydedilemedi: {isg_e}")
                 return jsonify({"basarili":True})
         return jsonify({"basarili":False,"hata":"Firma bulunamadi"})
     except Exception as e:
@@ -3900,6 +3953,16 @@ def api_firma_ekle():
             firma_id = f"{orijinal_id}_{sayac}"
             sayac += 1
         firma_ekle(firma_id, ad, grup_id)
+        # ISG bilgilerini kaydet (varsa)
+        sgk_no = veri.get("sgk_no","").strip()
+        nace_kodu = veri.get("nace_kodu","").strip()
+        tehlike_sinifi = veri.get("tehlike_sinifi","").strip()
+        if sgk_no or nace_kodu or tehlike_sinifi:
+            try:
+                from isg.firma_detay import firma_detay_kaydet
+                firma_detay_kaydet(firma_id, sgk_no, nace_kodu, tehlike_sinifi, yapan="panel")
+            except Exception as isg_e:
+                logger.warning(f"Yeni firma ISG detay kaydedilemedi: {isg_e}")
         return jsonify({"basarili":True,"firma_id":firma_id})
     except Exception as e:
         return jsonify({"basarili":False,"hata":str(e)})
