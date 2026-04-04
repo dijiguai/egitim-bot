@@ -21,8 +21,7 @@ def _giris_kontrol():
 # ── HTML — ISG Sekmesi (panel.py'deki tab sistemiyle uyumlu) ─────
 
 ISG_SEKME_HTML = """
-<div class="tab-content" id="tab-isg">
-  <div style="max-width:1000px;margin:0 auto">
+<div style="max-width:1000px;margin:0 auto">
 
     <!-- Alt sekmeler -->
     <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid var(--border);overflow-x:auto">
@@ -105,7 +104,6 @@ ISG_SEKME_HTML = """
       <div id="isg-audit-liste"><div class="loading"><div class="spinner"></div></div></div>
     </div>
 
-  </div>
 </div>
 
 <!-- UZMAN EKLE/DÜZENLE MODAL -->
