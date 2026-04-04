@@ -28,6 +28,8 @@ ISG_SEKME_HTML = """
       <div class="isg-alt-tab active" onclick="isgAltSekme('uzmanlar',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">👤 Uzmanlar</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('atamalar',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">🏭 Firma Atamaları</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('firma-detay',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📋 Firma ISG Detayı</div>
+      <div class="isg-alt-tab" onclick="isgAltSekme('sure-hesap',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">⏱️ Süre Hesaplama</div>
+      <div class="isg-alt-tab" onclick="isgAltSekme('personel-rapor',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📊 Personel Raporu</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('audit',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📜 Denetim Kaydı</div>
     </div>
 
@@ -93,6 +95,129 @@ ISG_SEKME_HTML = """
         <button class="btn btn-primary" onclick="isgFirmaDetayKaydet()">Kaydet</button>
       </div>
       <div id="isg-firma-detay-ozet" style="margin-top:20px"></div>
+    </div>
+
+    <!-- SÜRE HESAPLAMA -->
+    <div id="isg-panel-sure-hesap" class="isg-alt-panel" style="display:none">
+      <div style="font-family:Syne,sans-serif;font-weight:700;font-size:16px;margin-bottom:6px">⏱️ Zorunlu Eğitim & Uzman Süre Hesaplama</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:20px">6331 sayılı İSG Kanunu ve İSG Hizmetleri Yönetmeliği Ek-1'e göre otomatik hesaplama.</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+        <div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Çalışan Sayısı *</div>
+          <input type="number" id="sh-calisan" class="form-input" placeholder="örn: 45" min="1" oninput="shHesapla()">
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Tehlike Sınıfı *</div>
+          <select id="sh-tehlike" class="form-input" onchange="shHesapla()">
+            <option value="">Seçin</option>
+            <option value="Az Tehlikeli">🟢 Az Tehlikeli</option>
+            <option value="Tehlikeli">🟡 Tehlikeli</option>
+            <option value="Çok Tehlikeli">🔴 Çok Tehlikeli</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Atanmış Uzman Sınıfı</div>
+          <select id="sh-uzman-sinif" class="form-input" onchange="shHesapla()">
+            <option value="">Seçilmedi</option>
+            <option value="A">A Sınıfı</option>
+            <option value="B">B Sınıfı</option>
+            <option value="C">C Sınıfı</option>
+            <option value="—">Hekim / DSP</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="sh-sonuc" style="display:none">
+        <!-- Uzman sınıfı uyarısı -->
+        <div id="sh-sinif-uyari" style="display:none;padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:12px"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <!-- Zorunlu Eğitim Süresi -->
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">📚 Zorunlu Eğitim Süresi / Yıl</div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+              <span id="sh-toplam-saat" style="font-size:28px;font-weight:800;font-family:'Syne',sans-serif">—</span>
+              <span style="font-size:14px;color:var(--muted)">saat</span>
+            </div>
+            <div id="sh-egitim-aciklama" style="font-size:12px;color:var(--muted)"></div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+              Aylık: <strong id="sh-aylik-saat">—</strong> saat &nbsp;|&nbsp; Kişi başı: <strong id="sh-kisi-saat">—</strong> saat/yıl
+            </div>
+          </div>
+
+          <!-- Uzman Çalışma Süresi -->
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">🛡️ Uzman Zorunlu Çalışma Süresi</div>
+            <div id="sh-tam-zamanli-badge" style="display:none;background:#fdecea;color:var(--red);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;margin-bottom:8px">TAM ZAMANLI UZMAN ZORUNLU</div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+              <span id="sh-uzman-dk" style="font-size:28px;font-weight:800;font-family:'Syne',sans-serif">—</span>
+              <span id="sh-uzman-birim" style="font-size:14px;color:var(--muted)">dk/ay</span>
+            </div>
+            <div id="sh-uzman-aciklama" style="font-size:12px;color:var(--muted)"></div>
+            <div id="sh-uzman-saat-row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+              = <strong id="sh-uzman-saat">—</strong> saat/ay
+            </div>
+          </div>
+        </div>
+
+        <!-- Yasal Dayanak -->
+        <div style="background:#e8f7f0;border:1px solid #b7e8d0;border-radius:10px;padding:12px 16px;font-size:12px;color:var(--green)">
+          📋 <strong>Yasal Dayanak:</strong> 6331 sayılı İSG Kanunu Md.17 · İSG Hizmetleri Yönetmeliği Ek-1 ·
+          İşyerlerinde İSG Eğitimlerinin Usul ve Esasları Hakkında Yönetmelik
+        </div>
+
+        <div style="margin-top:12px;text-align:right">
+          <button class="btn btn-primary btn-sm" onclick="shKaydet()">Kaydet</button>
+        </div>
+      </div>
+
+      <div id="sh-bos" style="padding:40px;text-align:center;color:var(--muted)">
+        Çalışan sayısı ve tehlike sınıfını girin, süre otomatik hesaplanır.
+      </div>
+    </div>
+
+    <!-- PERSONEL RAPORU -->
+    <div id="isg-panel-personel-rapor" class="isg-alt-panel" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div>
+          <div style="font-family:Syne,sans-serif;font-weight:700;font-size:16px">📊 Personel Eğitim Raporu</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Aylık bazda hangi çalışan hangi eğitimi kaç dakika/saat aldı</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="pr-yil" class="form-input" style="width:auto" onchange="prYukle()">
+          </select>
+          <button class="btn btn-dark btn-sm" onclick="prYukle()">Yenile</button>
+        </div>
+      </div>
+
+      <div id="pr-yukleniyor" style="text-align:center;padding:40px;display:none">
+        <div class="spinner" style="margin:0 auto 12px"></div>Yükleniyor...
+      </div>
+
+      <!-- Firma özeti bar chart -->
+      <div id="pr-firma-ozet" style="display:none;margin-bottom:20px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Aylık Toplam Eğitim (Tüm Firma)</div>
+        <div id="pr-bar-chart" style="display:flex;gap:6px;align-items:flex-end;height:80px;padding-bottom:4px"></div>
+        <div id="pr-bar-labels" style="display:flex;gap:6px;margin-top:4px"></div>
+      </div>
+
+      <!-- Personel tablosu -->
+      <div id="pr-tablo-wrap" style="display:none">
+        <div style="overflow-x:auto">
+          <table id="pr-tablo" style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead id="pr-thead"></thead>
+            <tbody id="pr-tbody"></tbody>
+          </table>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">
+          * Sadece geçilen/tamamlanan eğitimler sayılır. Süre, eğitim tanımındaki "süre" alanından alınır (varsayılan: 60 dk).
+        </div>
+      </div>
+
+      <div id="pr-bos" style="padding:60px;text-align:center;color:var(--muted)">
+        Rapor yüklenmedi.
+      </div>
     </div>
 
     <!-- DENETİM KAYDI -->
@@ -424,6 +549,96 @@ def egitim_uzman_bilgisi():
         return jsonify(uzman_bilgisi_bul(firma_id, tarih))
     except Exception as e:
         return jsonify({})
+
+
+@isg_blueprint.route("/sure-hesap", methods=["POST"])
+def sure_hesap():
+    """
+    Çalışan sayısı + tehlike sınıfı + uzman sınıfı → süre özeti.
+    Body: {firma_id, calisan_sayisi, tehlike_sinifi, uzman_sinifi?}
+    """
+    k = _giris_kontrol()
+    if k: return k
+    veri = request.get_json()
+    firma_id = veri.get("firma_id", "")
+    try:
+        calisan_sayisi = int(veri.get("calisan_sayisi", 0))
+    except:
+        return jsonify({"hata": "Geçersiz çalışan sayısı"}), 400
+    tehlike_sinifi = veri.get("tehlike_sinifi", "")
+    uzman_sinifi = veri.get("uzman_sinifi", "")
+    if not tehlike_sinifi:
+        return jsonify({"hata": "Tehlike sınıfı zorunlu"}), 400
+    try:
+        from isg.sure_hesap import firma_sure_ozeti, sure_kaydet
+        ozet = firma_sure_ozeti(firma_id, tehlike_sinifi, calisan_sayisi, uzman_sinifi)
+        # Sheets'e kaydet
+        u = ozet["uzman"]
+        sure_kaydet(firma_id, calisan_sayisi,
+                    ozet["egitim"]["yillik_sure_saat"],
+                    u.get("aylik_sure_dk"), u.get("tam_zamanli", False))
+        return jsonify(ozet)
+    except Exception as e:
+        logger.error(f"Süre hesap hatası: {e}")
+        return jsonify({"hata": str(e)}), 500
+
+
+@isg_blueprint.route("/sure-hesap", methods=["GET"])
+def sure_hesap_get():
+    """Kaydedilmiş süre bilgisini döner."""
+    k = _giris_kontrol()
+    if k: return k
+    firma_id = request.args.get("firma_id", "")
+    if not firma_id:
+        return jsonify({})
+    try:
+        from isg.sure_hesap import SEKME, BASLIKLAR
+        from isg.sheets_base import tum_satirlar
+        for s in tum_satirlar(SEKME):
+            if s and s[0] == firma_id:
+                while len(s) < len(BASLIKLAR):
+                    s.append("")
+                return jsonify(dict(zip(BASLIKLAR, s)))
+        return jsonify({})
+    except Exception as e:
+        return jsonify({})
+
+
+@isg_blueprint.route("/personel-rapor", methods=["GET"])
+def personel_rapor():
+    """
+    Firmaya ait çalışanların aylık eğitim özeti.
+    Query: firma_id, yil (opsiyonel, default=cari yıl)
+    """
+    k = _giris_kontrol()
+    if k: return k
+    firma_id = request.args.get("firma_id", "")
+    try:
+        yil = int(request.args.get("yil", 0)) or None
+    except:
+        yil = None
+    if not firma_id:
+        return jsonify({"hata": "firma_id zorunlu"}), 400
+    try:
+        from isg.personel_rapor import aylik_egitim_ozeti, firma_personel_listesi
+        ozet = aylik_egitim_ozeti(firma_id, yil)
+        # Kayıt almamış ama aktif çalışanları da ekle
+        personel = firma_personel_listesi(firma_id)
+        for p in personel:
+            tid = p["telegram_id"]
+            if tid not in ozet["calisanlar"]:
+                ozet["calisanlar"][tid] = {
+                    "ad_soyad": p["ad_soyad"],
+                    "gorev": p["gorev"],
+                    "aylar": {},
+                    "yillik_toplam_dk": 0,
+                    "yillik_toplam_saat": 0,
+                    "egitim_sayisi": 0,
+                }
+        return jsonify(ozet)
+    except Exception as e:
+        logger.error(f"Personel rapor hatası: {e}")
+        return jsonify({"hata": str(e)}), 500
 
 
 @isg_blueprint.route("/html", methods=["GET"])
