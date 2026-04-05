@@ -25,7 +25,8 @@ ISG_SEKME_HTML = """
 
     <!-- Alt sekmeler -->
     <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid var(--border);overflow-x:auto">
-      <div class="isg-alt-tab active" onclick="isgAltSekme('atamalar',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">🏭 Firma Atamaları</div>
+      <div class="isg-alt-tab active" onclick="isgAltSekme('dashboard',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📈 Dashboard</div>
+      <div class="isg-alt-tab" onclick="isgAltSekme('atamalar',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">🏭 Firma Atamaları</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('firma-detay',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📋 Firma ISG Detayı</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('sure-hesap',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">⏱️ Süre Hesaplama</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('personel-rapor',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📊 Personel Raporu</div>
@@ -34,7 +35,60 @@ ISG_SEKME_HTML = """
     </div>
 
     <!-- UZMANLAR -->
-    <div id="isg-panel-uzmanlar" class="isg-alt-panel">
+    <!-- DASHBOARD -->
+    <div id="isg-panel-dashboard" class="isg-alt-panel">
+      <div id="db-yukleniyor" style="text-align:center;padding:40px">
+        <div class="spinner" style="margin:0 auto 12px"></div>Uyum skoru hesaplanıyor...
+      </div>
+
+      <!-- Skor çemberi + özet -->
+      <div id="db-icerik" style="display:none">
+
+        <!-- Üst: Skor + Seviye + Meta -->
+        <div style="display:flex;align-items:center;gap:24px;margin-bottom:24px;flex-wrap:wrap">
+          <div id="db-skor-daire" style="width:120px;height:120px;flex-shrink:0;position:relative">
+            <svg viewBox="0 0 120 120" style="width:100%;height:100%;transform:rotate(-90deg)">
+              <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
+              <circle id="db-skor-arc" cx="60" cy="60" r="50" fill="none" stroke="#27a86e"
+                stroke-width="10" stroke-linecap="round"
+                stroke-dasharray="314" stroke-dashoffset="314"
+                style="transition:stroke-dashoffset 1s ease,stroke 0.5s"/>
+            </svg>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+              <div id="db-skor-sayi" style="font-size:26px;font-weight:800;font-family:'Syne',sans-serif">0</div>
+              <div style="font-size:10px;color:var(--muted)">/ 100</div>
+            </div>
+          </div>
+          <div style="flex:1;min-width:180px">
+            <div id="db-seviye" style="font-size:22px;font-weight:700;font-family:'Syne',sans-serif;margin-bottom:4px">—</div>
+            <div id="db-tehlike-rozet" style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;margin-bottom:8px"></div>
+            <div id="db-meta" style="font-size:12px;color:var(--muted)"></div>
+          </div>
+          <button class="btn btn-dark btn-sm" onclick="dbYukle()">Yenile</button>
+        </div>
+
+        <!-- Puan kırılımı -->
+        <div id="db-maddeler" style="margin-bottom:20px"></div>
+
+        <!-- Uyarılar -->
+        <div id="db-uyarilar-wrap" style="display:none;margin-bottom:16px">
+          <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Uyarılar</div>
+          <div id="db-uyarilar"></div>
+        </div>
+
+        <!-- Öneriler -->
+        <div id="db-oneriler-wrap" style="display:none">
+          <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Önerilen Aksiyonlar</div>
+          <div id="db-oneriler"></div>
+        </div>
+
+        <div id="db-hesap-tarihi" style="font-size:11px;color:var(--muted);margin-top:16px;text-align:right"></div>
+      </div>
+
+      <div id="db-hata" style="display:none;padding:40px;text-align:center;color:var(--muted)"></div>
+    </div>
+
+    <div id="isg-panel-uzmanlar" class="isg-alt-panel" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <div style="font-family:Syne,sans-serif;font-weight:700;font-size:16px">Uzman / Hekim Kartları</div>
         <button class="btn btn-primary" onclick="isgUzmanModalAc()">+ Yeni Uzman Ekle</button>
@@ -668,6 +722,34 @@ def personel_rapor():
     except Exception as e:
         logger.error(f"Personel rapor hatası: {e}")
         return jsonify({"hata": str(e)}), 500
+
+
+@isg_blueprint.route("/dashboard", methods=["GET"])
+def isg_dashboard():
+    """Tek firma ISG uyum skoru ve detayı."""
+    k = _giris_kontrol()
+    if k: return k
+    firma_id = request.args.get("firma_id", "")
+    if not firma_id:
+        return jsonify({"hata": "firma_id zorunlu"}), 400
+    try:
+        from isg.dashboard import firma_uyum_skoru
+        return jsonify(firma_uyum_skoru(firma_id))
+    except Exception as e:
+        logger.error(f"Dashboard hatası: {e}")
+        return jsonify({"hata": str(e)}), 500
+
+
+@isg_blueprint.route("/dashboard-tum", methods=["GET"])
+def isg_dashboard_tum():
+    """Tüm firmaların özet uyum skoru listesi."""
+    k = _giris_kontrol()
+    if k: return k
+    try:
+        from isg.dashboard import tum_firmalar_dashboard
+        return jsonify(tum_firmalar_dashboard())
+    except Exception as e:
+        return jsonify([])
 
 
 @isg_blueprint.route("/zorunlu-egitimler", methods=["GET"])
