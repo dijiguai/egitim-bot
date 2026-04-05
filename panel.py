@@ -195,53 +195,124 @@ textarea.form-input{min-height:80px;resize:vertical}
 </div>
 
 {% elif logged_in and profil_secimi and not uzman_profil %}
-<!-- ADIM 2: Uzman profil kartı oluşturma -->
+<!-- ADIM 2: Uzman giriş / kayıt -->
 <div class="login-wrap">
   <div class="login-box" style="width:480px">
-    <div class="login-title">🛡️ Uzman Profiliniz</div>
-    <div class="login-sub" style="margin-bottom:20px">Kimlik bilgilerinizi girerek profilinizi oluşturun veya mevcut kaydınıza bağlanın</div>
-    <div id="uzman-kayit-hata" class="login-err" style="display:none;margin-bottom:12px"></div>
-    <div style="display:grid;gap:10px">
-      <input type="text" id="uk-ad" placeholder="Ad Soyad *" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
-      <select id="uk-unvan" onchange="ukUnvanDegisti()" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
-        <option value="">Unvan Seçin *</option>
-        <option value="is_guvenligi_uzmani">İş Güvenliği Uzmanı</option>
-        <option value="isyeri_hekimi">İşyeri Hekimi</option>
-        <option value="diger_saglik">Diğer Sağlık Personeli</option>
-        <option value="usta_ogretici">Usta Öğretici</option>
-        <option value="isveren">İşveren / Vekili</option>
-      </select>
-      <div id="uk-sinif-grup" style="display:none">
-        <select id="uk-sinif" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
-          <option value="—">Sınıf Seçin (Uzman için zorunlu) *</option>
-          <option value="A">A Sınıfı</option>
-          <option value="B">B Sınıfı</option>
-          <option value="C">C Sınıfı</option>
-        </select>
+    <div class="login-title">🛡️ Uzman Girişi</div>
+
+    <!-- Sekme geçiş -->
+    <div style="display:flex;gap:0;margin-bottom:24px;border-bottom:1px solid #333">
+      <button id="tab-giris-btn" onclick="ukSekme('giris')"
+        style="flex:1;background:none;border:none;border-bottom:2px solid var(--accent);padding:10px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
+        Kayıtlı Giriş
+      </button>
+      <button id="tab-yeni-btn" onclick="ukSekme('yeni')"
+        style="flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:10px;color:#666;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
+        İlk Kez Kayıt
+      </button>
+    </div>
+
+    <div id="uzman-hata" class="login-err" style="display:none;margin-bottom:12px"></div>
+
+    <!-- KAYITLI GİRİŞ -->
+    <div id="panel-giris">
+      <div style="font-size:13px;color:#888;margin-bottom:16px;line-height:1.6">
+        Sertifika numaranızla sisteme girin. Daha önce kayıt oluşturduysanız profil bilgileriniz otomatik yüklenir.
       </div>
-      <input type="text" id="uk-sertifika" placeholder="Sertifika / Belge No *" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
-      <input type="text" id="uk-diploma" placeholder="Diploma No (Hekim için)" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+      <input type="text" id="ug-sertifika" placeholder="Sertifika / Belge No *"
+        style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box;margin-bottom:12px"
+        onkeydown="if(event.key==='Enter')ugGiris()">
+      <button onclick="ugGiris()" class="login-btn">Giriş Yap</button>
     </div>
-    <div style="background:#1a1a18;border:1px solid #2a2a28;border-radius:10px;padding:10px 14px;font-size:12px;color:#666;margin-top:10px">
-      💡 Aynı sertifika numarasıyla daha önce kayıt oluşturduysanız, mevcut profilinize bağlanılır.
+
+    <!-- YENİ KAYIT -->
+    <div id="panel-yeni" style="display:none">
+      <div style="font-size:13px;color:#888;margin-bottom:16px;line-height:1.6">
+        İlk kez giriş yapıyorsanız bilgilerinizi doldurun. Sertifika numaranız benzersiz kimliğinizdir.
+      </div>
+      <div style="display:grid;gap:10px">
+        <input type="text" id="uk-ad" placeholder="Ad Soyad *"
+          style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+        <select id="uk-unvan" onchange="ukUnvanDegisti()"
+          style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+          <option value="">Unvan Seçin *</option>
+          <option value="is_guvenligi_uzmani">İş Güvenliği Uzmanı</option>
+          <option value="isyeri_hekimi">İşyeri Hekimi</option>
+          <option value="diger_saglik">Diğer Sağlık Personeli</option>
+          <option value="usta_ogretici">Usta Öğretici</option>
+          <option value="isveren">İşveren / Vekili</option>
+        </select>
+        <div id="uk-sinif-grup" style="display:none">
+          <select id="uk-sinif"
+            style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+            <option value="—">Sınıf Seçin (Uzman için zorunlu) *</option>
+            <option value="A">A Sınıfı</option>
+            <option value="B">B Sınıfı</option>
+            <option value="C">C Sınıfı</option>
+          </select>
+        </div>
+        <input type="text" id="uk-sertifika" placeholder="Sertifika / Belge No *"
+          style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+        <input type="text" id="uk-diploma" placeholder="Diploma No (Hekim için, opsiyonel)"
+          style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+      </div>
+      <button onclick="ukKaydet()" class="login-btn" style="margin-top:12px">Kayıt Ol ve Devam Et</button>
     </div>
-    <button onclick="ukKaydet()" class="login-btn" style="margin-top:16px">Profili Kaydet ve Devam Et</button>
-    <a href="/panel/cikis" style="color:#666;font-size:12px;text-decoration:none;display:block;text-align:center;margin-top:12px">Çıkış Yap</a>
+
+    <a href="/panel/cikis" style="color:#555;font-size:12px;text-decoration:none;display:block;text-align:center;margin-top:16px">← Geri / Çıkış Yap</a>
   </div>
 </div>
 <script>
+function ukSekme(tip) {
+  const giris = tip === 'giris';
+  document.getElementById('panel-giris').style.display = giris ? 'block' : 'none';
+  document.getElementById('panel-yeni').style.display = giris ? 'none' : 'block';
+  document.getElementById('tab-giris-btn').style.borderBottomColor = giris ? 'var(--accent)' : 'transparent';
+  document.getElementById('tab-giris-btn').style.color = giris ? '#fff' : '#666';
+  document.getElementById('tab-yeni-btn').style.borderBottomColor = giris ? 'transparent' : 'var(--accent)';
+  document.getElementById('tab-yeni-btn').style.color = giris ? '#666' : '#fff';
+  document.getElementById('uzman-hata').style.display = 'none';
+}
 function ukUnvanDegisti() {
   const v = document.getElementById('uk-unvan').value;
   document.getElementById('uk-sinif-grup').style.display =
     v === 'is_guvenligi_uzmani' ? 'block' : 'none';
 }
+async function ugGiris() {
+  const sertifika = document.getElementById('ug-sertifika').value.trim();
+  const hataEl = document.getElementById('uzman-hata');
+  hataEl.style.display = 'none';
+  if (!sertifika) {
+    hataEl.textContent = '⚠️ Sertifika no zorunlu';
+    hataEl.style.display = 'block';
+    return;
+  }
+  try {
+    const r = await fetch('/panel/uzman-giris', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sertifika_no: sertifika})
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      window.location.reload();
+    } else {
+      hataEl.textContent = '⚠️ ' + (d.hata || 'Giriş yapılamadı');
+      hataEl.style.display = 'block';
+    }
+  } catch(e) {
+    hataEl.textContent = '⚠️ Bağlantı hatası';
+    hataEl.style.display = 'block';
+  }
+}
 async function ukKaydet() {
   const ad = document.getElementById('uk-ad').value.trim();
   const unvan = document.getElementById('uk-unvan').value;
-  const sinif = document.getElementById('uk-sinif') ? document.getElementById('uk-sinif').value : '—';
+  const sinifEl = document.getElementById('uk-sinif');
+  const sinif = sinifEl ? sinifEl.value : '—';
   const sertifika = document.getElementById('uk-sertifika').value.trim();
   const diploma = document.getElementById('uk-diploma').value.trim();
-  const hataEl = document.getElementById('uzman-kayit-hata');
+  const hataEl = document.getElementById('uzman-hata');
   hataEl.style.display = 'none';
   if (!ad || !unvan || !sertifika) {
     hataEl.textContent = '⚠️ Ad soyad, unvan ve sertifika no zorunlu';
@@ -3583,6 +3654,36 @@ def profil_sec():
         return redirect("/panel")
     session["profil_secimi"] = tip
     return redirect("/panel")
+
+
+@app.route("/panel/uzman-giris", methods=["POST"])
+def uzman_giris():
+    """Kayıtlı uzman sertifika numarasıyla giriş yapar."""
+    if not session.get("panel_giris"):
+        return jsonify({"basarili": False, "hata": "Yetkisiz"}), 401
+    veri = request.get_json()
+    sertifika_no = veri.get("sertifika_no", "").strip()
+    if not sertifika_no:
+        return jsonify({"basarili": False, "hata": "Sertifika no zorunlu"})
+    try:
+        from isg.uzmanlar import tum_uzmanlar
+        uzmanlar = tum_uzmanlar(sadece_aktif=True)
+        eslesme = [u for u in uzmanlar if u.get("sertifika_no", "").strip() == sertifika_no]
+        if not eslesme:
+            return jsonify({"basarili": False, "hata": "Bu sertifika numarasıyla kayıtlı uzman bulunamadı"})
+        u = eslesme[0]
+        session["uzman_id"] = u["uzman_id"]
+        session["uzman_profil"] = {
+            "uzman_id":     u["uzman_id"],
+            "ad_soyad":     u.get("ad_soyad", ""),
+            "unvan":        u.get("unvan", ""),
+            "sinif":        u.get("sinif", ""),
+            "sertifika_no": u.get("sertifika_no", ""),
+        }
+        return jsonify({"basarili": True, "ad_soyad": u.get("ad_soyad", "")})
+    except Exception as e:
+        logger.error(f"Uzman giriş hatası: {e}")
+        return jsonify({"basarili": False, "hata": str(e)})
 
 
 @app.route("/panel/uzman-kayit", methods=["POST"])
