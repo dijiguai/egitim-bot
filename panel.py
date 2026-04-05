@@ -581,6 +581,41 @@ async function ukKaydet() {
         </div>
       </div>
     </div>
+    <!-- Bildirim Ayarları -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px">
+      <div class="section-title" style="margin-bottom:12px">🔔 Otomatik Bildirim Ayarları</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Admin Telegram ID</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="ayar-admin-tg-id" placeholder="örn: 123456789" style="flex:1">
+            <button class="btn btn-dark btn-sm" onclick="ayarKaydet('admin_telegram_id','ayar-admin-tg-id')">💾</button>
+          </div>
+          <div id="ayar-admin-tg-id-info" style="font-size:11px;color:var(--accent);margin-top:4px;font-weight:600"></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Haftalık özet ve uyarılar bu ID'ye gönderilir</div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">14:00 Hatırlatma</label>
+          <select class="form-input" id="ayar-hatirlat-aktif" onchange="ayarKaydet('hatirlat_aktif', 'ayar-hatirlat-aktif')">
+            <option value="1">✅ Aktif — tamamlamayana hatırlatma gönder</option>
+            <option value="0">❌ Pasif — hatırlatma gönderme</option>
+          </select>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Her gün saat 14:00'da eğitimi tamamlamamış çalışanlara</div>
+        </div>
+      </div>
+      <div style="background:#e8f7f0;border:1px solid #b7e8d0;border-radius:10px;padding:10px 14px;font-size:12px;color:var(--green)">
+        📅 <b>Otomatik zamanlama:</b>
+        08:00 Eğitim başlar ·
+        14:00 Hatırlatma ·
+        17:00 Eğitim kapanır ·
+        Her Pazartesi: Haftalık özet + Uzman sözleşme uyarısı + Zorunlu eğitim uyarısı
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn btn-dark btn-sm" onclick="bildirimiTestEt()">🧪 Test Bildirimi Gönder</button>
+        <span id="bildirim-test-sonuc" style="font-size:12px;margin-left:10px;color:var(--muted)"></span>
+      </div>
+    </div>
+
     <!-- Liste -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div>
@@ -966,6 +1001,12 @@ async function davetAyarlariYukle() {
 
     if(gl) { gl.value = d.grup_link || ''; console.log('grup_link set edildi:', d.grup_link); }
     if(at) { at.value = d.admin_tel || ''; console.log('admin_tel set edildi:', d.admin_tel); }
+    const atgId = document.getElementById('ayar-admin-tg-id');
+    if(atgId) { atgId.value = d.admin_telegram_id || ''; }
+    const atgInfo = document.getElementById('ayar-admin-tg-id-info');
+    if(atgInfo) atgInfo.textContent = d.admin_telegram_id ? 'Kayıtlı: ' + d.admin_telegram_id : '';
+    const hatirlatEl = document.getElementById('ayar-hatirlat-aktif');
+    if(hatirlatEl) hatirlatEl.value = d.hatirlat_aktif || '1';
 
     if(glInfo) glInfo.textContent = d.grup_link
       ? 'Kayıtlı: ' + d.grup_link.substring(0,50) + (d.grup_link.length>50?'...':'')
@@ -3549,6 +3590,47 @@ function prRenderTablo(d) {
 }
 
 
+async function bildirimiTestEt() {
+  const sonucEl = document.getElementById('bildirim-test-sonuc');
+  if (sonucEl) sonucEl.textContent = 'Gönderiliyor...';
+  try {
+    const r = await fetch('/panel/api/bildirim-test', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({firma_id: aktifFirma})
+    });
+    const d = await r.json();
+    if (sonucEl) sonucEl.textContent = d.basarili ? '✅ Gönderildi!' : '❌ ' + (d.hata||'Hata');
+  } catch(e) {
+    if (sonucEl) sonucEl.textContent = '❌ Bağlantı hatası';
+  }
+}
+
+// ── ISG Hatırlatmalar — Manuel Tetikleme ──────────────────────
+async function hatirlatTetikle(tip) {
+  const etiket = {sozlesme:'Sözleşme uyarısı', haftalik:'Haftalık özet', aylik:'Aylık kontrol'}[tip] || tip;
+  const sonucEl = document.getElementById('hatirlat-sonuc');
+  if (sonucEl) { sonucEl.textContent = `${etiket} gönderiliyor...`; sonucEl.style.display = 'block'; sonucEl.style.color = 'var(--muted)'; }
+  try {
+    const r = await fetch('/panel/isg/hatirlat-tetikle', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tip})
+    });
+    const d = await r.json();
+    if (sonucEl) {
+      if (d.basarili) {
+        sonucEl.textContent = `✅ ${etiket} gönderildi — ${d.gonderilen} mesaj`;
+        sonucEl.style.color = 'var(--green)';
+      } else {
+        sonucEl.textContent = `⚠️ Hata: ${d.hata || 'Bilinmeyen'}`;
+        sonucEl.style.color = 'var(--red)';
+      }
+      setTimeout(() => { if(sonucEl) sonucEl.style.display = 'none'; }, 5000);
+    }
+  } catch(e) {
+    if (sonucEl) { sonucEl.textContent = '⚠️ Bağlantı hatası'; sonucEl.style.color = 'var(--red)'; }
+  }
+}
+
 // ── Zorunlu Eğitim Takibi ─────────────────────────────────────
 let _zeVeri = null;
 let _zeFiltre = 'hepsi';
@@ -5261,6 +5343,44 @@ def api_firma_grup_linki():
     except Exception as e:
         from config import BOT_USERNAME
         return jsonify({"link":"","bot_username":BOT_USERNAME,"admin_tel":""})
+
+
+@app.route("/panel/api/bildirim-test", methods=["POST"])
+def api_bildirim_test():
+    """Admin'e test bildirimi gönderir."""
+    if not session.get("panel_giris"): return jsonify({"basarili":False}), 401
+    try:
+        from sheets import _servis
+        s, sid = _servis()
+        r = s.values().get(spreadsheetId=sid, range="Ayarlar!A1:B30").execute()
+        ayarlar = {satir[0]: satir[1] for satir in r.get("values",[]) if len(satir) >= 2}
+        admin_tg_id = ayarlar.get("admin_telegram_id", "")
+        if not admin_tg_id:
+            return jsonify({"basarili": False, "hata": "Admin Telegram ID tanımlı değil. Davetler sekmesindeki Bildirim Ayarlarından girin."})
+        import requests as req_lib
+        token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        resp = req_lib.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={
+                "chat_id": int(admin_tg_id),
+                "text": (
+                    "🧪 *Test Bildirimi*\n\n"
+                    "ISG Eğitim Paneli bildirim sistemi aktif ve çalışıyor.\n\n"
+                    "Otomatik zamanlamalar:\n"
+                    "• 08:00 — Günlük eğitim başlar\n"
+                    "• 14:00 — Tamamlamayan hatırlatması\n"
+                    "• 17:00 — Eğitim kapanır\n"
+                    "• Her Pazartesi — Haftalık özet + uyarılar"
+                ),
+                "parse_mode": "Markdown"
+            },
+            timeout=10
+        )
+        if resp.json().get("ok"):
+            return jsonify({"basarili": True})
+        return jsonify({"basarili": False, "hata": resp.json().get("description","Telegram hatası")})
+    except Exception as e:
+        return jsonify({"basarili": False, "hata": str(e)})
 
 
 @app.route("/panel/api/ayar-kaydet", methods=["POST"])
