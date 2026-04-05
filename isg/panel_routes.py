@@ -25,8 +25,7 @@ ISG_SEKME_HTML = """
 
     <!-- Alt sekmeler -->
     <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid var(--border);overflow-x:auto">
-      <div class="isg-alt-tab active" onclick="isgAltSekme('uzmanlar',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">👤 Uzmanlar</div>
-      <div class="isg-alt-tab" onclick="isgAltSekme('atamalar',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">🏭 Firma Atamaları</div>
+      <div class="isg-alt-tab active" onclick="isgAltSekme('atamalar',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">🏭 Firma Atamaları</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('firma-detay',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📋 Firma ISG Detayı</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('sure-hesap',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">⏱️ Süre Hesaplama</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('personel-rapor',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📊 Personel Raporu</div>
