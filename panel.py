@@ -150,8 +150,8 @@ textarea.form-input{min-height:80px;resize:vertical}
 {% if not logged_in %}
 <div class="login-wrap">
   <div class="login-box">
-    <div class="login-title">Yönetici Girişi</div>
-    <div class="login-sub">İş Başı Eğitim Paneli</div>
+    <div class="login-title">Eğitim Paneli</div>
+    <div class="login-sub">İş Başı Eğitim & ISG Yönetim Sistemi</div>
     <form method="POST" action="/panel/login">
       <div style="position:relative">
         <input type="password" name="sifre" id="si" placeholder="Şifre" autofocus style="padding-right:44px">
@@ -163,6 +163,116 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 </div>
 
+{% elif logged_in and not profil_secimi %}
+<!-- ADIM 1: Profil tipi seçimi -->
+<div class="login-wrap">
+  <div class="login-box" style="width:420px">
+    <div class="login-title">Hoşgeldiniz</div>
+    <div class="login-sub" style="margin-bottom:24px">Panele giriş tipinizi seçin</div>
+    <form method="POST" action="/panel/profil-sec">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px">
+        <button type="submit" name="profil_tipi" value="uzman"
+          style="background:#1a1a18;border:2px solid #e85c2e;border-radius:12px;padding:20px 8px;color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;transition:background .15s">
+          <div style="font-size:28px;margin-bottom:8px">🛡️</div>
+          İSG Uzmanı
+        </button>
+        <button type="submit" name="profil_tipi" value="hekim"
+          style="background:#1a1a18;border:1px solid #333;border-radius:12px;padding:20px 8px;color:#888;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;position:relative">
+          <div style="font-size:28px;margin-bottom:8px">🏥</div>
+          İşyeri Hekimi
+          <div style="position:absolute;top:6px;right:6px;background:#333;border-radius:4px;padding:1px 5px;font-size:9px;color:#666">Yakında</div>
+        </button>
+        <button type="submit" name="profil_tipi" value="osgb"
+          style="background:#1a1a18;border:1px solid #333;border-radius:12px;padding:20px 8px;color:#888;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;position:relative">
+          <div style="font-size:28px;margin-bottom:8px">🏢</div>
+          OSGB
+          <div style="position:absolute;top:6px;right:6px;background:#333;border-radius:4px;padding:1px 5px;font-size:9px;color:#666">Yakında</div>
+        </button>
+      </div>
+    </form>
+    <a href="/panel/cikis" style="color:#666;font-size:12px;text-decoration:none;display:block;text-align:center">Çıkış Yap</a>
+  </div>
+</div>
+
+{% elif logged_in and profil_secimi and not uzman_profil %}
+<!-- ADIM 2: Uzman profil kartı oluşturma -->
+<div class="login-wrap">
+  <div class="login-box" style="width:480px">
+    <div class="login-title">🛡️ Uzman Profiliniz</div>
+    <div class="login-sub" style="margin-bottom:20px">Kimlik bilgilerinizi girerek profilinizi oluşturun veya mevcut kaydınıza bağlanın</div>
+    <div id="uzman-kayit-hata" class="login-err" style="display:none;margin-bottom:12px"></div>
+    <div style="display:grid;gap:10px">
+      <input type="text" id="uk-ad" placeholder="Ad Soyad *" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+      <select id="uk-unvan" onchange="ukUnvanDegisti()" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+        <option value="">Unvan Seçin *</option>
+        <option value="is_guvenligi_uzmani">İş Güvenliği Uzmanı</option>
+        <option value="isyeri_hekimi">İşyeri Hekimi</option>
+        <option value="diger_saglik">Diğer Sağlık Personeli</option>
+        <option value="usta_ogretici">Usta Öğretici</option>
+        <option value="isveren">İşveren / Vekili</option>
+      </select>
+      <div id="uk-sinif-grup" style="display:none">
+        <select id="uk-sinif" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+          <option value="—">Sınıf Seçin (Uzman için zorunlu) *</option>
+          <option value="A">A Sınıfı</option>
+          <option value="B">B Sınıfı</option>
+          <option value="C">C Sınıfı</option>
+        </select>
+      </div>
+      <input type="text" id="uk-sertifika" placeholder="Sertifika / Belge No *" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+      <input type="text" id="uk-diploma" placeholder="Diploma No (Hekim için)" style="width:100%;background:#1a1a18;border:1px solid #333;border-radius:10px;padding:12px 16px;color:#fff;font-size:14px;outline:none;font-family:'DM Sans',sans-serif;box-sizing:border-box">
+    </div>
+    <div style="background:#1a1a18;border:1px solid #2a2a28;border-radius:10px;padding:10px 14px;font-size:12px;color:#666;margin-top:10px">
+      💡 Aynı sertifika numarasıyla daha önce kayıt oluşturduysanız, mevcut profilinize bağlanılır.
+    </div>
+    <button onclick="ukKaydet()" class="login-btn" style="margin-top:16px">Profili Kaydet ve Devam Et</button>
+    <a href="/panel/cikis" style="color:#666;font-size:12px;text-decoration:none;display:block;text-align:center;margin-top:12px">Çıkış Yap</a>
+  </div>
+</div>
+<script>
+function ukUnvanDegisti() {
+  const v = document.getElementById('uk-unvan').value;
+  document.getElementById('uk-sinif-grup').style.display =
+    v === 'is_guvenligi_uzmani' ? 'block' : 'none';
+}
+async function ukKaydet() {
+  const ad = document.getElementById('uk-ad').value.trim();
+  const unvan = document.getElementById('uk-unvan').value;
+  const sinif = document.getElementById('uk-sinif') ? document.getElementById('uk-sinif').value : '—';
+  const sertifika = document.getElementById('uk-sertifika').value.trim();
+  const diploma = document.getElementById('uk-diploma').value.trim();
+  const hataEl = document.getElementById('uzman-kayit-hata');
+  hataEl.style.display = 'none';
+  if (!ad || !unvan || !sertifika) {
+    hataEl.textContent = '⚠️ Ad soyad, unvan ve sertifika no zorunlu';
+    hataEl.style.display = 'block';
+    return;
+  }
+  if (unvan === 'is_guvenligi_uzmani' && (!sinif || sinif === '—')) {
+    hataEl.textContent = '⚠️ İş güvenliği uzmanı için sınıf (A/B/C) zorunlu';
+    hataEl.style.display = 'block';
+    return;
+  }
+  try {
+    const r = await fetch('/panel/uzman-kayit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ad_soyad: ad, unvan, sinif, sertifika_no: sertifika, diploma_no: diploma})
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      window.location.reload();
+    } else {
+      hataEl.textContent = '⚠️ ' + (d.hata || 'Hata oluştu');
+      hataEl.style.display = 'block';
+    }
+  } catch(e) {
+    hataEl.textContent = '⚠️ Bağlantı hatası';
+    hataEl.style.display = 'block';
+  }
+}
+</script>
+
 {% else %}
 <div class="header">
   <div style="display:flex;align-items:center;gap:12px">
@@ -170,6 +280,15 @@ textarea.form-input{min-height:80px;resize:vertical}
     <span id="aktif-firma-adi" style="font-size:13px;color:var(--muted);display:none"></span>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
+    {% if uzman_profil %}
+    <div style="display:flex;align-items:center;gap:8px;background:#242420;border:1px solid #333;border-radius:8px;padding:6px 12px">
+      <span style="font-size:16px">🛡️</span>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:#fff">{{ uzman_profil.ad_soyad }}</div>
+        <div style="font-size:10px;color:#666">{{ uzman_profil.sinif }} Sınıfı · Sert: {{ uzman_profil.sertifika_no }}</div>
+      </div>
+    </div>
+    {% endif %}
     <button id="geri-btn" class="btn btn-dark btn-sm" onclick="anaSeyfayaDon()" style="display:none">← Firmalar</button>
     <a href="/panel/cikis"><button class="logout-btn">Çıkış</button></a>
   </div>
@@ -177,8 +296,6 @@ textarea.form-input{min-height:80px;resize:vertical}
 <div class="tabs" id="ana-tabs" style="display:none">
   <div class="tab active" onclick="sekme('kayitlar',this)">📊 Kayıtlar</div>
   <div class="tab" onclick="sekme('calisanlar',this)">👥 Çalışanlar</div>
-  <div class="tab" onclick="sekme('istatistik',this)">📈 İstatistik</div>
-  <div class="tab" onclick="sekme('mesajlar',this)">💬 Grup Mesajları</div>
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
   <div class="tab" onclick="sekme('davetler',this)">📱 Davetler</div>
   <div class="tab" onclick="sekme('toplu-egitim',this)">🚀 Toplu Gönder</div>
@@ -198,17 +315,19 @@ textarea.form-input{min-height:80px;resize:vertical}
     <button class="btn btn-dark" onclick="bugunSec()">Bugün</button>
   </div>
 
-  <!-- KAYITLAR -->
   <!-- ANA SAYFA — Firma Kartları -->
   <div id="ana-sayfa" style="padding:32px 24px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div>
-        <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700">Firmalar</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:4px">Yönetmek istediğiniz firmayı seçin</div>
+        <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700">Firmalarım</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px" id="firma-sayfa-alt">Atandığınız firmalar listeleniyor...</div>
       </div>
-      <button class="btn btn-primary" onclick="firmaEkleModalAc()">+ Yeni Firma Ekle</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-dark btn-sm" onclick="firmaSayfasiFiltreToggle()" id="tum-firmalar-btn" title="Tüm firmaları / sadece atandıklarımı göster">Tüm Firmalar</button>
+        <button class="btn btn-primary" onclick="firmaEkleModalAc()">+ Yeni Firma Ekle</button>
+      </div>
     </div>
-    <div id="firma-kartlari" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
+    <div id="firma-kartlari" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:20px"></div>
   </div>
 
   <div class="tab-content" id="tab-kayitlar">
@@ -549,6 +668,31 @@ textarea.form-input{min-height:80px;resize:vertical}
   </div>
 </div>
 
+<!-- UZMAN KENDİNİ FİRMAYA ATA MODALI -->
+<div class="modal-overlay" id="firma-ata-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">🏭 Firmaya Atama</div>
+    <div class="modal-sub">Kendinizi bu firmada görevlendirin</div>
+    <div style="background:var(--bg);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-weight:600" id="fa-firma-adi"></div>
+    <div class="form-group">
+      <label class="form-label">Görev Tipi *</label>
+      <select class="form-input" id="fa-unvan-tip">
+        <option value="is_guvenligi_uzmani">İş Güvenliği Uzmanı olarak</option>
+        <option value="isyeri_hekimi">İşyeri Hekimi olarak</option>
+        <option value="diger_saglik">Diğer Sağlık Personeli olarak</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Başlangıç Tarihi * (GG.AA.YYYY)</label>
+      <input type="text" class="form-input" id="fa-baslangic" placeholder="01.01.2025">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" style="flex:1" onclick="firmaAtaKaydet()">Ata</button>
+      <button class="btn btn-dark" onclick="modalKapat('firma-ata-modal')">İptal</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="manuel-egitim-modal">
   <div class="modal" style="max-width:600px;width:95vw">
     <div class="modal-title">📝 Manuel Eğitim Ekle</div>
@@ -784,65 +928,147 @@ function sekme(ad, el) {
 // ── KAYITLAR ──────────────────────────────
 // Aktif firma
 let aktifFirma = "varsayilan";
+let _tumFirmalarModu = false;  // true=tüm firmalar, false=sadece atanmış
+
+function firmaSayfasiFiltreToggle() {
+  _tumFirmalarModu = !_tumFirmalarModu;
+  const btn = document.getElementById('tum-firmalar-btn');
+  if (btn) btn.textContent = _tumFirmalarModu ? 'Sadece Atandıklarım' : 'Tüm Firmalar';
+  firmaKartlariniYukle();
+}
 
 async function firmaKartlariniYukle() {
   const konteyner = document.getElementById('firma-kartlari');
+  const altEl = document.getElementById('firma-sayfa-alt');
   konteyner.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
-    const r = await fetch('/panel/api/firmalar-detay');
-    const firmalar = await r.json();
+    // Uzman atama endpoint'ini dene, hata alırsa eski endpoint'e düş
+    let firmalar = [];
+    let uzmanModu = false;
+    try {
+      const r = await fetch('/panel/api/uzman-firmalari');
+      if (r.ok) {
+        const d = await r.json();
+        if (!d.hata) {
+          uzmanModu = true;
+          firmalar = _tumFirmalarModu ? d : d.filter(f => f.atanmis);
+        }
+      }
+    } catch(e2) {}
+
+    if (!uzmanModu) {
+      const r = await fetch('/panel/api/firmalar-detay');
+      firmalar = await r.json();
+    }
+
+    if(altEl) altEl.textContent = uzmanModu
+      ? (_tumFirmalarModu ? 'Tüm firmalar gösteriliyor' : `${firmalar.length} firmaya atandınız`)
+      : 'Yönetmek istediğiniz firmayı seçin';
+
     if(!firmalar.length) {
-      konteyner.innerHTML = `<div class="egitim-kart" style="text-align:center;padding:40px;cursor:pointer" onclick="firmaEkleModalAc()">
-        <div style="font-size:40px;margin-bottom:12px">➕</div>
-        <div style="font-weight:700">İlk Firmayı Ekle</div>
-        <div style="color:var(--muted);font-size:13px;margin-top:6px">Başlamak için bir firma ekleyin</div>
+      konteyner.innerHTML = `<div class="egitim-kart" style="text-align:center;padding:40px">
+        <div style="font-size:40px;margin-bottom:12px">🏭</div>
+        <div style="font-weight:700">Henüz atanmış firma yok</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:6px;margin-bottom:16px">
+          "Tüm Firmalar" butonuyla mevcut firmaları görüp kendinizi atayabilirsiniz.
+        </div>
+        <button class="btn btn-primary" onclick="firmaEkleModalAc()">+ Yeni Firma Ekle</button>
       </div>`;
       return;
     }
-    konteyner.innerHTML = firmalar.map(f => `
-      <div class="egitim-kart" style="cursor:pointer;transition:transform 0.15s" 
-           onmouseover="this.style.transform='translateY(-2px)'" 
+
+    const tehlikeRenk = {'Çok Tehlikeli':'#fdecea','Tehlikeli':'#fff8e6','Az Tehlikeli':'#e8f7f0','':''};
+    const tehlikeYazi = {'Çok Tehlikeli':'var(--red)','Tehlikeli':'#856404','Az Tehlikeli':'var(--green)','':'var(--muted)'};
+    const tehlikeEmoji = {'Çok Tehlikeli':'🔴','Tehlikeli':'🟡','Az Tehlikeli':'🟢','':'⚪'};
+
+    konteyner.innerHTML = firmalar.map(f => {
+      const th = f.tehlike_sinifi || '';
+      const ozet = f.sure_ozet || {};
+      const atanmisRozetHTML = uzmanModu && !f.atanmis
+        ? `<button class="btn btn-dark btn-sm" style="font-size:11px" onclick="event.stopPropagation();firmaAtaModalAc('${f.firma_id}','${f.ad}')">+ Kendimi Ata</button>`
+        : (uzmanModu ? `<span style="background:#e8f7f0;color:var(--green);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">✓ Atandım</span>` : '');
+
+      const isgOzetHTML = th ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:${tehlikeRenk[th]||'var(--bg)'};border-radius:8px;margin-bottom:10px">
+          <span style="font-size:12px;color:${tehlikeYazi[th]||'var(--muted)'};">${tehlikeEmoji[th]} ${th}</span>
+          ${ozet.yillik_egitim_saat ? `<span style="font-size:11px;color:var(--muted)">${f.calisan_sayisi} çalışan · ${ozet.yillik_egitim_saat}s/yıl</span>` : ''}
+        </div>` : '';
+
+      return `
+      <div class="egitim-kart" style="cursor:pointer;transition:transform 0.15s;${!f.atanmis&&uzmanModu?'opacity:0.75':''}"
+           onmouseover="this.style.transform='translateY(-2px)'"
            onmouseout="this.style.transform=''"
            onclick="firmaAc('${f.firma_id}','${f.ad}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
-          <div>
-            <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px">${f.ad}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px">Grup ID: ${f.grup_id || '—'}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.ad}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Grup: ${f.grup_id||'—'}</div>
           </div>
-          <div style="width:44px;height:44px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">🏭</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:10px">
+            <div style="width:40px;height:40px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏭</div>
+            ${atanmisRozetHTML}
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
-          <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif">${f.calisan_sayisi}</div>
-            <div style="font-size:11px;color:var(--muted)">Çalışan</div>
+        ${isgOzetHTML}
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px">
+          <div style="background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:800;font-family:'Syne',sans-serif">${f.calisan_sayisi||f.calisan_sayisi===0?f.calisan_sayisi:'—'}</div>
+            <div style="font-size:10px;color:var(--muted)">Çalışan</div>
           </div>
-          <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:var(--green)">${f.bugun_tamamlayan}</div>
-            <div style="font-size:11px;color:var(--muted)">Bugün Geçti</div>
+          <div style="background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:800;font-family:'Syne',sans-serif;color:var(--green)">${f.bugun_tamamlayan||0}</div>
+            <div style="font-size:10px;color:var(--muted)">Bugün Geçti</div>
           </div>
-          <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:var(--accent)">${f.toplam_kayit}</div>
-            <div style="font-size:11px;color:var(--muted)">Toplam Kayıt</div>
+          <div style="background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:800;font-family:'Syne',sans-serif;color:var(--accent)">${f.toplam_kayit||0}</div>
+            <div style="font-size:10px;color:var(--muted)">Toplam Kayıt</div>
           </div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-dark btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();firmaDuzenle('${f.firma_id}','${f.ad}','${f.grup_id}')">✏️</button>
+          <button class="btn btn-dark btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();firmaDuzenle('${f.firma_id}','${f.ad}','${f.grup_id||''}')">✏️</button>
           <button class="btn btn-red btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();firmaSil('${f.firma_id}','${f.ad}')">🗑</button>
-          <button class="btn btn-primary" style="flex:1" onclick="event.stopPropagation();firmaAc('${f.firma_id}','${f.ad}')">
-            Yönet →
-          </button>
+          <button class="btn btn-primary" style="flex:1" onclick="event.stopPropagation();firmaAc('${f.firma_id}','${f.ad}')">Yönet →</button>
         </div>
-      </div>`).join('') + `
-      <div class="egitim-kart" style="cursor:pointer;border:2px dashed var(--border);background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;transition:border-color 0.15s"
-           onmouseover="this.style.borderColor='var(--accent)'" 
+      </div>`;
+    }).join('') + `
+      <div class="egitim-kart" style="cursor:pointer;border:2px dashed var(--border);background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;transition:border-color 0.15s"
+           onmouseover="this.style.borderColor='var(--accent)'"
            onmouseout="this.style.borderColor='var(--border)'"
            onclick="firmaEkleModalAc()">
-        <div style="font-size:32px;margin-bottom:8px">➕</div>
-        <div style="font-weight:600;color:var(--muted)">Yeni Firma Ekle</div>
+        <div style="font-size:28px;margin-bottom:8px">➕</div>
+        <div style="font-weight:600;color:var(--muted);font-size:14px">Yeni Firma Ekle</div>
       </div>`;
   } catch(e) {
     konteyner.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi: ' + e.message + '</div>';
   }
+}
+
+// ── Uzman kendini firmaya atama modalı ───────────────────────
+let _firmaAtaId = '', _firmaAtaAd = '';
+function firmaAtaModalAc(firma_id, firma_ad) {
+  _firmaAtaId = firma_id; _firmaAtaAd = firma_ad;
+  const bugun = new Date().toLocaleDateString('tr-TR');
+  document.getElementById('fa-firma-adi').textContent = firma_ad;
+  document.getElementById('fa-baslangic').value = bugun;
+  document.getElementById('firma-ata-modal').classList.add('open');
+}
+async function firmaAtaKaydet() {
+  const bas = document.getElementById('fa-baslangic').value.trim();
+  const tip = document.getElementById('fa-unvan-tip').value;
+  if (!bas) { alert('Başlangıç tarihi zorunlu'); return; }
+  try {
+    const r = await fetch('/panel/api/uzman-firma-ata', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({firma_id: _firmaAtaId, unvan_tipi: tip, baslangic_tarihi: bas})
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      modalKapat('firma-ata-modal');
+      firmaKartlariniYukle();
+    } else {
+      alert('Hata: ' + (d.hata||''));
+    }
+  } catch(e) { alert('Bağlantı hatası'); }
 }
 
 async function firmaSil(firma_id, ad) {
@@ -2445,7 +2671,7 @@ async function isgModulYukle() {
 
     setTimeout(() => {
       const ilk = tab.querySelector('.isg-alt-tab');
-      if (ilk) ilk.click();
+      if (ilk) { ilk.click(); }
     }, 50);
   } catch(e) {
     tab.innerHTML = `<div style="padding:60px;text-align:center;color:var(--muted)">
@@ -2470,7 +2696,6 @@ function isgAltSekme(ad, el) {
   el.classList.add('active');
   el.style.color = 'var(--text)';
   el.style.borderBottomColor = 'var(--accent)';
-  if (ad === 'uzmanlar') isgUzmanListesiYukle();
   if (ad === 'atamalar') { isgAtamalariYukle(); isgFirmalariYukle('isg-atama-firma-filtre'); }
   if (ad === 'firma-detay') isgFirmalariYukle('isg-detay-firma-sec');
   if (ad === 'audit') isgAuditYukle();
@@ -3328,7 +3553,13 @@ async function takvimKatilmayanlaraGonder(egitimId, idler, btn) {
 
 @app.route("/panel")
 def panel():
-    return render_template_string(HTML, logged_in=session.get("panel_giris",False), hata=False)
+    return render_template_string(
+        HTML,
+        logged_in=session.get("panel_giris", False),
+        hata=False,
+        uzman_profil=session.get("uzman_profil"),
+        profil_secimi=session.get("profil_secimi"),
+    )
 
 @app.route("/panel/login", methods=["POST"])
 def login():
@@ -3340,7 +3571,154 @@ def login():
         if tid:
             return redirect(f"/panel?acik_tid={tid}&acik_ad={ad}")
         return redirect("/panel")
-    return render_template_string(HTML, logged_in=False, hata=True)
+    return render_template_string(HTML, logged_in=False, hata=True, uzman_profil=None, profil_secimi=None)
+
+@app.route("/panel/profil-sec", methods=["POST"])
+def profil_sec():
+    """Giriş sonrası profil tipi seçimi: uzman / hekim / osgb"""
+    if not session.get("panel_giris"):
+        return redirect("/panel")
+    tip = request.form.get("profil_tipi", "").strip()
+    if tip not in ("uzman", "hekim", "osgb"):
+        return redirect("/panel")
+    session["profil_secimi"] = tip
+    return redirect("/panel")
+
+
+@app.route("/panel/uzman-kayit", methods=["POST"])
+def uzman_kayit():
+    """Uzman kendi profilini oluşturur veya günceller."""
+    if not session.get("panel_giris"):
+        return jsonify({"basarili": False, "hata": "Yetkisiz"}), 401
+    veri = request.get_json()
+    try:
+        from isg.uzmanlar import uzman_ekle, tum_uzmanlar, uzman_guncelle
+        ad_soyad     = veri.get("ad_soyad", "").strip()
+        unvan        = veri.get("unvan", "").strip()
+        sinif        = veri.get("sinif", "—").strip()
+        sertifika_no = veri.get("sertifika_no", "").strip()
+        diploma_no   = veri.get("diploma_no", "").strip()
+
+        if not ad_soyad or not unvan or not sertifika_no:
+            return jsonify({"basarili": False, "hata": "Ad soyad, unvan ve sertifika no zorunlu"})
+
+        # Aynı sertifika numarasıyla kayıtlı uzman var mı?
+        mevcut = [u for u in tum_uzmanlar(sadece_aktif=False)
+                  if u.get("sertifika_no") == sertifika_no]
+
+        if mevcut:
+            u = mevcut[0]
+            uzman_id = u["uzman_id"]
+            uzman_guncelle(uzman_id, ad_soyad=ad_soyad, unvan=unvan,
+                           sinif=sinif, sertifika_no=sertifika_no,
+                           diploma_no=diploma_no, yapan="self")
+        else:
+            uzman_id = uzman_ekle(ad_soyad, unvan, sinif, sertifika_no,
+                                  diploma_no=diploma_no, yapan="self")
+            if not uzman_id:
+                return jsonify({"basarili": False, "hata": "Kayıt oluşturulamadı. Unvan ve sınıf uyumunu kontrol edin."})
+
+        # Session'a kaydet
+        session["uzman_id"] = uzman_id
+        session["uzman_profil"] = {
+            "uzman_id":     uzman_id,
+            "ad_soyad":     ad_soyad,
+            "unvan":        unvan,
+            "sinif":        sinif,
+            "sertifika_no": sertifika_no,
+        }
+        return jsonify({"basarili": True, "uzman_id": uzman_id})
+    except Exception as e:
+        logger.error(f"Uzman kayıt hatası: {e}")
+        return jsonify({"basarili": False, "hata": str(e)})
+
+
+@app.route("/panel/api/uzman-firmalari")
+def api_uzman_firmalari():
+    """Oturumdaki uzmanın atandığı firmaları döner."""
+    if not session.get("panel_giris"):
+        return jsonify({"hata": "Yetkisiz"}), 401
+    uzman_id = session.get("uzman_id", "")
+    try:
+        from isg.atama_gecmisi import tum_satirlar as atama_satirlar, SEKME as ATAMA_SEKME, BASLIKLAR as ATAMA_BASLIKLAR
+        from isg.sheets_base import tum_satirlar
+        from firma_manager import tum_firmalar
+        from isg.firma_detay import firma_detay_getir
+        from isg.sure_hesap import uzman_sure_hesapla, egitim_sure_hesapla
+
+        firmalar = tum_firmalar()
+        atamalar = tum_satirlar(ATAMA_SEKME)
+
+        # Uzmanın aktif atamalarını bul
+        uzman_firma_ids = set()
+        for s in atamalar:
+            while len(s) < len(ATAMA_BASLIKLAR):
+                s.append("")
+            a = dict(zip(ATAMA_BASLIKLAR, s))
+            if a.get("uzman_id") == uzman_id and a.get("aktif") == "1":
+                uzman_firma_ids.add(a.get("firma_id", ""))
+
+        sonuc = []
+        for firma_id, f in firmalar.items():
+            if uzman_id and firma_id not in uzman_firma_ids:
+                continue  # Sadece atanmış firmalar
+            detay = firma_detay_getir(firma_id)
+            tehlike = detay.get("tehlike_sinifi", "")
+            calisan_str = detay.get("calisan_sayisi", "0")
+            try:
+                calisan = int(calisan_str) if calisan_str else 0
+            except:
+                calisan = 0
+
+            sure_ozet = {}
+            if tehlike and calisan:
+                e = egitim_sure_hesapla(tehlike, calisan)
+                u = uzman_sure_hesapla(tehlike, calisan)
+                sure_ozet = {
+                    "yillik_egitim_saat": e["yillik_sure_saat"],
+                    "uzman_aylik_dk": u.get("aylik_sure_dk"),
+                    "tam_zamanli": u.get("tam_zamanli", False),
+                }
+
+            sonuc.append({
+                "firma_id":      firma_id,
+                "ad":            f.get("ad", firma_id),
+                "grup_id":       f.get("grup_id", ""),
+                "calisan_sayisi": calisan,
+                "tehlike_sinifi": tehlike,
+                "sgk_no":        detay.get("sgk_sicil_no", ""),
+                "nace_kodu":     detay.get("nace_kodu", ""),
+                "sure_ozet":     sure_ozet,
+                "atanmis":       firma_id in uzman_firma_ids,
+            })
+
+        return jsonify(sonuc)
+    except Exception as e:
+        logger.error(f"Uzman firmaları hatası: {e}")
+        return jsonify([])
+
+
+@app.route("/panel/api/uzman-firma-ata", methods=["POST"])
+def api_uzman_firma_ata():
+    """Uzmanın kendini bir firmaya ataması."""
+    if not session.get("panel_giris"):
+        return jsonify({"basarili": False}), 401
+    uzman_id = session.get("uzman_id", "")
+    if not uzman_id:
+        return jsonify({"basarili": False, "hata": "Önce profil oluşturun"})
+    veri = request.get_json()
+    firma_id       = veri.get("firma_id", "").strip()
+    unvan_tipi     = veri.get("unvan_tipi", "is_guvenligi_uzmani")
+    baslangic      = veri.get("baslangic_tarihi", "")
+    if not firma_id or not baslangic:
+        return jsonify({"basarili": False, "hata": "Firma ve başlangıç tarihi zorunlu"})
+    try:
+        from isg.atama_gecmisi import atama_ekle
+        atama_id = atama_ekle(uzman_id, firma_id, unvan_tipi, baslangic, yapan="self")
+        return jsonify({"basarili": bool(atama_id), "atama_id": atama_id})
+    except Exception as e:
+        return jsonify({"basarili": False, "hata": str(e)})
+
 
 @app.route("/panel/cikis")
 def cikis():
