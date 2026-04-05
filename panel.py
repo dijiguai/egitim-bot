@@ -422,6 +422,15 @@ async function ukKaydet() {
 
   <!-- ÇALIŞANLAR -->
   <div class="tab-content" id="tab-calisanlar">
+    <!-- İstatistik Özeti — Çalışanlar sekmesinin üstünde -->
+    <div id="calisan-istatistik-ozet" style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:600;color:var(--muted)">📈 Eğitim İstatistiği</div>
+        <button class="btn btn-dark btn-sm" onclick="calisanIstatistikYukle()" style="font-size:11px">Yenile</button>
+      </div>
+      <div id="calisan-stats-mini" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin-bottom:20px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div style="display:flex;align-items:center;gap:12px">
         <div class="section-title" style="margin:0">Çalışan Listesi</div>
@@ -448,11 +457,6 @@ async function ukKaydet() {
       </div>
     </div>
     <div id="mesaj-log-liste"><div class="empty"><div class="empty-icon">💬</div>Yükleniyor...</div></div>
-  </div>
-
-  <div class="tab-content" id="tab-istatistik">
-    <div class="section-title">Eğitim Bazında Başarı Oranı</div>
-    <div id="egitim-stats"><div class="loading"><div class="spinner"></div></div></div>
   </div>
 
   <!-- EĞİTİMLER -->
@@ -982,13 +986,13 @@ function modalKapat(id){ document.getElementById(id).classList.remove('open'); }
 function sekme(ad, el) {
   document.querySelectorAll('.tab-content').forEach(t=>{
     t.classList.remove('active');
-    t.style.display = '';  // inline style'i temizle
+    t.style.display = '';
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+ad).classList.add('active');
   el.classList.add('active');
-  document.getElementById('filtre-bar').style.display = (ad==='kayitlar'||ad==='istatistik'||ad==='mesajlar') ? 'flex' : 'none';
-  if(ad==='calisanlar') calisanListesiYukle();
+  document.getElementById('filtre-bar').style.display = (ad==='kayitlar'||ad==='mesajlar') ? 'flex' : 'none';
+  if(ad==='calisanlar') { calisanListesiYukle(); calisanIstatistikYukle(); }
   if(ad==='egitimler') egitimListesiYukle();
   if(ad==='mesajlar') mesajLogYukle();
   if(ad==='davetler') { davetListesiYukle(); davetAyarlariYukle(); }
@@ -1407,15 +1411,77 @@ function renderKayitlar(kayitlarHam) {
 }
 
 function renderIstatistik(ozet) {
-  if(!Object.keys(ozet).length){document.getElementById('egitim-stats').innerHTML='<div class="empty"><div class="empty-icon">📊</div>Veri yok</div>';return;}
-  document.getElementById('egitim-stats').innerHTML=Object.entries(ozet).map(([konu,e])=>{
-    const pct=e.toplam?Math.round(e.gecti/e.toplam*100):0;
-    const cls=pct>=70?'':pct>=50?'orta':'dusuk';
-    return `<div class="eg-satir">
-      <div><div class="eg-baslik">${konu}</div><div class="eg-meta">${e.toplam} katılım · ${e.gecti} geçti · ${e.kaldi} kaldı</div></div>
-      <div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
-      <div class="bar-pct" style="color:${pct>=70?'var(--green)':pct>=50?'var(--yellow)':'var(--red)'}">${pct}%</div>
-    </div>`;}).join('');
+  const el = document.getElementById('egitim-stats');
+  if (el) {
+    if(!Object.keys(ozet).length){el.innerHTML='<div class="empty"><div class="empty-icon">📊</div>Veri yok</div>';return;}
+    el.innerHTML=Object.entries(ozet).map(([konu,e])=>{
+      const pct=e.toplam?Math.round(e.gecti/e.toplam*100):0;
+      const cls=pct>=70?'':pct>=50?'orta':'dusuk';
+      return `<div class="eg-satir">
+        <div><div class="eg-baslik">${konu}</div><div class="eg-meta">${e.toplam} katılım · ${e.gecti} geçti · ${e.kaldi} kaldı</div></div>
+        <div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
+        <div class="bar-pct" style="color:${pct>=70?'var(--green)':pct>=50?'var(--yellow)':'var(--red)'}">${pct}%</div>
+      </div>`;}).join('');
+  }
+  // Mini kartlar — çalışanlar sekmesindeki özet
+  calisanStatsMiniRender(ozet);
+}
+
+function calisanStatsMiniRender(ozet) {
+  const el = document.getElementById('calisan-stats-mini');
+  if (!el) return;
+  if (!ozet || !Object.keys(ozet).length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:8px">Bu tarih aralığında kayıt yok.</div>';
+    return;
+  }
+  // Genel özet rakamları
+  let topKatilim = 0, topGecti = 0, topKaldi = 0;
+  Object.values(ozet).forEach(e => { topKatilim += e.toplam; topGecti += e.gecti; topKaldi += e.kaldi; });
+  const genelPct = topKatilim ? Math.round(topGecti / topKatilim * 100) : 0;
+  const genelRenk = genelPct >= 70 ? 'var(--green)' : genelPct >= 50 ? '#e8b82e' : 'var(--red)';
+
+  const kartlar = [
+    {label: 'Toplam Katılım', deger: topKatilim, renk: 'var(--text)'},
+    {label: 'Geçti', deger: topGecti, renk: 'var(--green)'},
+    {label: 'Kaldı', deger: topKaldi, renk: 'var(--red)'},
+    {label: 'Başarı', deger: genelPct + '%', renk: genelRenk},
+  ];
+
+  el.innerHTML = kartlar.map(k =>
+    `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px">
+      <div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:${k.renk}">${k.deger}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${k.label}</div>
+    </div>`
+  ).join('') + `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;grid-column:1/-1">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Eğitim Bazlı</div>
+      ${Object.entries(ozet).map(([konu,e]) => {
+        const pct = e.toplam ? Math.round(e.gecti/e.toplam*100) : 0;
+        const rc = pct>=70?'var(--green)':pct>=50?'#e8b82e':'var(--red)';
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${konu}</div>
+          <div style="background:var(--border);border-radius:4px;height:5px;width:100px;flex-shrink:0;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${rc};border-radius:4px"></div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:${rc};min-width:32px;text-align:right">${pct}%</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function calisanIstatistikYukle() {
+  const bas = document.getElementById('tarih-bas')?.value || '';
+  const bitis = document.getElementById('tarih-bitis')?.value || '';
+  const basStr = bas ? bas.split('-').reverse().join('.') : '';
+  const bitisStr = bitis ? bitis.split('-').reverse().join('.') : '';
+  try {
+    const r = await fetch(`/panel/api/kayitlar?bas=${basStr}&bitis=${bitisStr}&durum=&firma_id=${aktifFirma}`);
+    const d = await r.json();
+    calisanStatsMiniRender(d.egitim_ozet || {});
+  } catch(e) {
+    const el = document.getElementById('calisan-stats-mini');
+    if (el) el.innerHTML = '<div style="font-size:12px;color:var(--muted)">İstatistik yüklenemedi</div>';
+  }
 }
 
 // ── ÇALIŞANLAR ────────────────────────────
