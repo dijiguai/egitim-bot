@@ -29,6 +29,7 @@ ISG_SEKME_HTML = """
       <div class="isg-alt-tab" onclick="isgAltSekme('firma-detay',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📋 Firma ISG Detayı</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('sure-hesap',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">⏱️ Süre Hesaplama</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('personel-rapor',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📊 Personel Raporu</div>
+      <div class="isg-alt-tab" onclick="isgAltSekme('zorunlu-egitim',this)" style="padding:10px 16px;font-size:13px;color:#e85c2e;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:600">⚠️ Zorunlu Eğitimler</div>
       <div class="isg-alt-tab" onclick="isgAltSekme('audit',this)" style="padding:10px 16px;font-size:13px;color:#666;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-weight:500">📜 Denetim Kaydı</div>
     </div>
 
@@ -217,6 +218,35 @@ ISG_SEKME_HTML = """
       <div id="pr-bos" style="padding:60px;text-align:center;color:var(--muted)">
         Rapor yüklenmedi.
       </div>
+    </div>
+
+    <!-- ZORUNLU EĞİTİMLER -->
+    <div id="isg-panel-zorunlu-egitim" class="isg-alt-panel" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div>
+          <div style="font-family:Syne,sans-serif;font-weight:700;font-size:16px">⚠️ Zorunlu Eğitim Takibi</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">6331 ve Yönetmelik Ek-1 kapsamında tüm çalışanların eğitim uyumu</div>
+        </div>
+        <button class="btn btn-dark btn-sm" onclick="zeYukle()">Yenile</button>
+      </div>
+
+      <!-- Özet kartlar -->
+      <div id="ze-ozet" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px"></div>
+
+      <!-- Filtre -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-sm" id="ze-f-hepsi" onclick="zeFiltre('hepsi',this)" style="background:var(--accent);color:#fff;border-radius:8px;padding:5px 14px;font-size:12px;border:none;cursor:pointer">Tümü</button>
+        <button class="btn btn-sm" id="ze-f-eksik" onclick="zeFiltre('eksik',this)" style="background:var(--bg);color:var(--muted);border-radius:8px;padding:5px 14px;font-size:12px;border:1px solid var(--border);cursor:pointer">Eksik Var</button>
+        <button class="btn btn-sm" id="ze-f-hic" onclick="zeFiltre('hic',this)" style="background:var(--bg);color:var(--muted);border-radius:8px;padding:5px 14px;font-size:12px;border:1px solid var(--border);cursor:pointer">Hiç Almamış</button>
+        <button class="btn btn-sm" id="ze-f-tamam" onclick="zeFiltre('tamam',this)" style="background:var(--bg);color:var(--muted);border-radius:8px;padding:5px 14px;font-size:12px;border:1px solid var(--border);cursor:pointer">Uyumlu</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-primary btn-sm" onclick="zeTopluGonder()" id="ze-toplu-btn" style="display:none">📤 Seçililere Gönder</button>
+      </div>
+
+      <div id="ze-yukleniyor" style="text-align:center;padding:40px;display:none">
+        <div class="spinner" style="margin:0 auto 12px"></div>Yükleniyor...
+      </div>
+      <div id="ze-liste"></div>
     </div>
 
     <!-- DENETİM KAYDI -->
@@ -638,6 +668,146 @@ def personel_rapor():
     except Exception as e:
         logger.error(f"Personel rapor hatası: {e}")
         return jsonify({"hata": str(e)}), 500
+
+
+@isg_blueprint.route("/zorunlu-egitimler", methods=["GET"])
+def zorunlu_egitimler():
+    """
+    Firmadaki tüm çalışanların zorunlu eğitim durumu.
+    Query: firma_id, tehlike_sinifi (opsiyonel — firma_detay'dan alınır)
+    """
+    k = _giris_kontrol()
+    if k: return k
+    firma_id = request.args.get("firma_id", "")
+    if not firma_id:
+        return jsonify({"hata": "firma_id zorunlu"}), 400
+    try:
+        tehlike = request.args.get("tehlike_sinifi", "")
+        if not tehlike:
+            from isg.firma_detay import firma_detay_getir
+            tehlike = firma_detay_getir(firma_id).get("tehlike_sinifi", "")
+
+        from isg.zorunlu_egitim import (
+            tehlike_icin_zorunlu_egitimler,
+            calisan_eksik_egitimler,
+            firma_ozet_istatistik
+        )
+        from isg.personel_rapor import firma_personel_listesi
+
+        calisanlar = firma_personel_listesi(firma_id)
+        zorunlu_liste = tehlike_icin_zorunlu_egitimler(tehlike)
+        ozet = firma_ozet_istatistik(firma_id, tehlike)
+
+        calisan_durumlar = []
+        for c in calisanlar:
+            tid = c.get("telegram_id", "")
+            eksikler = calisan_eksik_egitimler(tid, firma_id, tehlike) if tid else zorunlu_liste
+            calisan_durumlar.append({
+                "telegram_id": tid,
+                "ad_soyad":    c.get("ad_soyad", ""),
+                "gorev":       c.get("gorev", ""),
+                "egitimler":   eksikler,
+                "eksik_sayisi": len([e for e in eksikler if e["durum"] in ("hic_alinmadi", "suresi_dolmus")]),
+                "yaklasan_sayisi": len([e for e in eksikler if e["durum"] == "suresi_yaklashyor"]),
+            })
+
+        # Eksik olana göre sırala
+        calisan_durumlar.sort(key=lambda x: x["eksik_sayisi"], reverse=True)
+
+        return jsonify({
+            "firma_id":     firma_id,
+            "tehlike":      tehlike,
+            "zorunlu_liste": zorunlu_liste,
+            "calisanlar":   calisan_durumlar,
+            "ozet":         ozet,
+        })
+    except Exception as e:
+        logger.error(f"Zorunlu eğitim hatası: {e}")
+        return jsonify({"hata": str(e)}), 500
+
+
+@isg_blueprint.route("/zorunlu-egitim-gonder", methods=["POST"])
+def zorunlu_egitim_gonder():
+    """
+    Belirli çalışana veya tüm eksik çalışanlara zorunlu eğitim gönder.
+    Body: {firma_id, egitim_id?, telegram_idler: [], konu, tur}
+    egitim_id varsa o eğitimi, yoksa konu+tur ile sistemdeki eğitimi bulur.
+    """
+    k = _giris_kontrol()
+    if k: return k
+    veri = request.get_json()
+    firma_id      = veri.get("firma_id", "")
+    egitim_id     = veri.get("egitim_id", "")
+    konu          = veri.get("konu", "")
+    telegram_idler = veri.get("telegram_idler", [])
+
+    if not firma_id or not telegram_idler:
+        return jsonify({"basarili": False, "hata": "firma_id ve en az bir telegram_id zorunlu"})
+
+    try:
+        import os, requests as req_lib, time
+        token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        base  = f"https://api.telegram.org/bot{token}"
+
+        # Eğitim mesajı
+        if egitim_id:
+            from egitimler_sheets import tum_egitimler
+            egitimler = tum_egitimler()
+            egitim = egitimler.get(egitim_id)
+            mesaj_baslik = egitim["baslik"] if egitim else konu
+        else:
+            mesaj_baslik = konu or "Zorunlu İSG Eğitimi"
+
+        keyboard = None
+        if egitim_id:
+            keyboard = {"inline_keyboard": [[{
+                "text": "▶️ Eğitime Başla",
+                "callback_data": f"egitim_baslat:{egitim_id}"
+            }]]}
+            # Ekstra hak ver
+            try:
+                from durum import ekstra_hak_ver, aktif_egitim_set
+                aktif_egitim_set(egitim_id)
+                for tid in telegram_idler:
+                    try:
+                        ekstra_hak_ver(int(tid))
+                    except:
+                        pass
+            except:
+                pass
+
+        basarili = gonderilemeyen = 0
+        for tid in telegram_idler:
+            try:
+                payload = {
+                    "chat_id": int(tid),
+                    "text": (
+                        "🛡️ *Zorunlu İSG Eğitimi*\n\n"
+                        f"*{mesaj_baslik}*\n\n"
+                        "Bu eğitim, işyerinizde yasal zorunluluk kapsamındadır. "
+                        "Lütfen tamamlayın."
+                    ),
+                    "parse_mode": "Markdown",
+                }
+                if keyboard:
+                    payload["reply_markup"] = keyboard
+                r = req_lib.post(f"{base}/sendMessage", json=payload, timeout=10)
+                if r.json().get("ok"):
+                    basarili += 1
+                else:
+                    gonderilemeyen += 1
+                time.sleep(0.05)
+            except:
+                gonderilemeyen += 1
+
+        return jsonify({
+            "basarili": True,
+            "gonderilen": basarili,
+            "gonderilemeyen": gonderilemeyen,
+        })
+    except Exception as e:
+        logger.error(f"Zorunlu eğitim gönderme hatası: {e}")
+        return jsonify({"basarili": False, "hata": str(e)})
 
 
 @isg_blueprint.route("/html", methods=["GET"])
