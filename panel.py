@@ -2767,6 +2767,7 @@ function isgAltSekme(ad, el) {
   el.classList.add('active');
   el.style.color = 'var(--text)';
   el.style.borderBottomColor = 'var(--accent)';
+  if (ad === 'dashboard') dbYukle();
   if (ad === 'atamalar') { isgAtamalariYukle(); isgFirmalariYukle('isg-atama-firma-filtre'); }
   if (ad === 'firma-detay') isgFirmalariYukle('isg-detay-firma-sec');
   if (ad === 'audit') isgAuditYukle();
@@ -3077,6 +3078,124 @@ async function isgAuditYukle() {
   } catch(e) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>Yüklenemedi</div>';
   }
+}
+
+// ── ISG Dashboard ─────────────────────────────────────────────
+async function dbYukle() {
+  if (!aktifFirma) return;
+  const yukEl = document.getElementById('db-yukleniyor');
+  const iceEl = document.getElementById('db-icerik');
+  const hatEl = document.getElementById('db-hata');
+  if (!yukEl) return;
+  yukEl.style.display = 'block';
+  iceEl.style.display = 'none';
+  hatEl.style.display = 'none';
+
+  try {
+    const r = await fetch(`/panel/isg/dashboard?firma_id=${encodeURIComponent(aktifFirma)}`);
+    const d = await r.json();
+    yukEl.style.display = 'none';
+    if (d.hata) { hatEl.textContent = d.hata; hatEl.style.display = 'block'; return; }
+    dbRender(d);
+    iceEl.style.display = 'block';
+  } catch(e) {
+    yukEl.style.display = 'none';
+    hatEl.textContent = 'Bağlantı hatası: ' + e.message;
+    hatEl.style.display = 'block';
+  }
+}
+
+function dbRender(d) {
+  // Skor çemberi
+  const arc = document.getElementById('db-skor-arc');
+  const sayi = document.getElementById('db-skor-sayi');
+  const seviyeEl = document.getElementById('db-seviye');
+  if (arc && sayi) {
+    const cevre = 314;
+    const offset = cevre - (d.skor / 100) * cevre;
+    setTimeout(() => {
+      arc.style.strokeDashoffset = offset;
+      arc.style.stroke = d.renk;
+    }, 100);
+    sayi.textContent = d.skor;
+    sayi.style.color = d.renk;
+  }
+  if (seviyeEl) {
+    seviyeEl.textContent = d.seviye;
+    seviyeEl.style.color = d.renk;
+  }
+
+  // Tehlike rozeti
+  const tehlikeEl = document.getElementById('db-tehlike-rozet');
+  if (tehlikeEl) {
+    const tr = {'Çok Tehlikeli':['#fdecea','var(--red)','🔴'],
+                'Tehlikeli':['#fff8e6','#856404','🟡'],
+                'Az Tehlikeli':['#e8f7f0','var(--green)','🟢']};
+    const [bg, c, em] = tr[d.tehlike] || ['var(--bg)','var(--muted)','⚪'];
+    tehlikeEl.style.background = bg;
+    tehlikeEl.style.color = c;
+    tehlikeEl.textContent = d.tehlike ? `${em} ${d.tehlike}` : '⚪ Tehlike sınıfı girilmemiş';
+  }
+
+  // Meta bilgi
+  const metaEl = document.getElementById('db-meta');
+  if (metaEl) {
+    metaEl.textContent = `${d.calisan || 0} çalışan · Son güncelleme: ${d.hesap_tarihi}`;
+  }
+
+  // Puan maddeleri
+  const madEl = document.getElementById('db-maddeler');
+  if (madEl && d.maddeler) {
+    const durumIkon = {ok:'✅', uyari:'⚠️', eksik:'❌', belirsiz:'⚪', hata:'⚙️'};
+    madEl.innerHTML = d.maddeler.map(m => {
+      const oran = m.max_puan > 0 ? (m.puan / m.max_puan * 100) : 0;
+      const barRenk = m.durum === 'ok' ? '#27a86e' : m.durum === 'uyari' ? '#e8b82e' : m.durum === 'eksik' ? '#e83a2e' : 'var(--muted)';
+      return `<div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span>${durumIkon[m.durum]||'⚪'}</span>
+            <span style="font-size:13px;font-weight:500">${m.baslik}</span>
+          </div>
+          <span style="font-size:13px;font-weight:700;color:${barRenk}">${m.puan}<span style="font-size:11px;color:var(--muted);font-weight:400"> / ${m.max_puan}</span></span>
+        </div>
+        <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden;margin-bottom:3px">
+          <div style="width:${oran}%;height:100%;background:${barRenk};border-radius:4px;transition:width 0.8s ease"></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted)">${m.aciklama}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Uyarılar
+  const uyWrap = document.getElementById('db-uyarilar-wrap');
+  const uyEl   = document.getElementById('db-uyarilar');
+  if (uyEl && d.uyarilar && d.uyarilar.length) {
+    uyEl.innerHTML = d.uyarilar.map(u =>
+      `<div style="padding:8px 12px;background:#fdecea;border-left:3px solid var(--red);border-radius:0 8px 8px 0;margin-bottom:6px;font-size:13px">${u}</div>`
+    ).join('');
+    uyWrap.style.display = 'block';
+  } else if (uyWrap) {
+    uyWrap.style.display = 'none';
+  }
+
+  // Öneriler
+  const onWrap = document.getElementById('db-oneriler-wrap');
+  const onEl   = document.getElementById('db-oneriler');
+  if (onEl && d.oneriler && d.oneriler.length) {
+    onEl.innerHTML = d.oneriler.map((o, i) =>
+      `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px;font-size:13px">
+        <span style="color:var(--accent);font-weight:700;flex-shrink:0">${i+1}.</span>
+        <span>${o}</span>
+      </div>`
+    ).join('');
+    onWrap.style.display = 'block';
+  } else if (onWrap) {
+    onWrap.style.display = 'none';
+  }
+
+  // Tarih
+  const tarEl = document.getElementById('db-hesap-tarihi');
+  if (tarEl) tarEl.textContent = 'Hesaplanma: ' + d.hesap_tarihi;
 }
 
 // ── ISG Süre Hesaplama ─────────────────────────────────────────
