@@ -2772,6 +2772,7 @@ function isgAltSekme(ad, el) {
   if (ad === 'audit') isgAuditYukle();
   if (ad === 'sure-hesap') isgSureHesapBaslat();
   if (ad === 'personel-rapor') prYukle();
+  if (ad === 'zorunlu-egitim') zeYukle();
 }
 
 // ── UZMANLAR ──────────────────────────────────────────────────
@@ -3362,6 +3363,184 @@ function prRenderTablo(d) {
   }).join('');
 }
 
+
+// ── Zorunlu Eğitim Takibi ─────────────────────────────────────
+let _zeVeri = null;
+let _zeFiltre = 'hepsi';
+
+async function zeYukle() {
+  if (!aktifFirma) return;
+  document.getElementById('ze-yukleniyor').style.display = 'block';
+  document.getElementById('ze-liste').innerHTML = '';
+  document.getElementById('ze-ozet').innerHTML = '';
+  try {
+    const r = await fetch(`/panel/isg/zorunlu-egitimler?firma_id=${encodeURIComponent(aktifFirma)}`);
+    const d = await r.json();
+    document.getElementById('ze-yukleniyor').style.display = 'none';
+    if (d.hata) {
+      document.getElementById('ze-liste').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>${d.hata}</div>`;
+      return;
+    }
+    if (!d.tehlike) {
+      document.getElementById('ze-liste').innerHTML = `<div class="empty"><div class="empty-icon">📋</div><b>Tehlike sınıfı tanımlanmamış</b><br><small>Önce Firma ISG Detayı sekmesinden tehlike sınıfını girin.</small></div>`;
+      return;
+    }
+    _zeVeri = d;
+    zeRenderOzet(d.ozet, d.tehlike);
+    zeRenderListe(d.calisanlar);
+  } catch(e) {
+    document.getElementById('ze-yukleniyor').style.display = 'none';
+    document.getElementById('ze-liste').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>Bağlantı hatası</div>`;
+  }
+}
+
+function zeRenderOzet(ozet, tehlike) {
+  if (!ozet) return;
+  const tehlikeRenk = {'Çok Tehlikeli':'var(--red)','Tehlikeli':'#856404','Az Tehlikeli':'var(--green)'};
+  const tr = tehlikeRenk[tehlike] || 'var(--muted)';
+  document.getElementById('ze-ozet').innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:22px;font-weight:800;font-family:'Syne',sans-serif">${ozet.toplam_calisan||0}</div>
+      <div style="font-size:11px;color:var(--muted)">Toplam Çalışan</div>
+    </div>
+    <div style="background:#e8f7f0;border:1px solid #b7e8d0;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:22px;font-weight:800;font-family:'Syne',sans-serif;color:var(--green)">${ozet.tam_uyumlu||0}</div>
+      <div style="font-size:11px;color:var(--green)">Tam Uyumlu</div>
+    </div>
+    <div style="background:#fff8e6;border:1px solid #f5d87a;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:22px;font-weight:800;font-family:'Syne',sans-serif;color:#856404">${ozet.eksik_var||0}</div>
+      <div style="font-size:11px;color:#856404">Eksik Var</div>
+    </div>
+    <div style="background:#fdecea;border:1px solid #f5bcb8;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:22px;font-weight:800;font-family:'Syne',sans-serif;color:var(--red)">${ozet.hic_almamis||0}</div>
+      <div style="font-size:11px;color:var(--red)">Hiç Almamış</div>
+    </div>`;
+}
+
+function zeFiltre(tip, el) {
+  _zeFiltre = tip;
+  document.querySelectorAll('[id^="ze-f-"]').forEach(b => {
+    b.style.background = 'var(--bg)';
+    b.style.color = 'var(--muted)';
+    b.style.border = '1px solid var(--border)';
+  });
+  el.style.background = 'var(--accent)';
+  el.style.color = '#fff';
+  el.style.border = 'none';
+  if (_zeVeri) zeRenderListe(_zeVeri.calisanlar);
+}
+
+const zeDurumRenk = {
+  'hic_alinmadi':     {bg:'#fdecea', c:'var(--red)',   ikon:'✗', label:'Hiç alınmadı'},
+  'suresi_dolmus':    {bg:'#fff0e0', c:'#c05000',       ikon:'⟳', label:'Süresi dolmuş'},
+  'suresi_yaklashyor':{bg:'#fff8e6', c:'#856404',       ikon:'⚠', label:'Süresi yaklaşıyor'},
+  'guncel':           {bg:'#e8f7f0', c:'var(--green)', ikon:'✓', label:'Güncel'},
+};
+const zeKatRenk = {
+  'isg_genel':'#e6f1fb','isg_is_giris':'#e8f7f0','isg_acil':'#fdecea',
+  'isg_kisisel':'#fff8e6','isg_ozel':'#fbeaf0','toolbox':'#f1efe8','isg_yenileme':'#f1efe8'
+};
+const zeKatYazi = {
+  'isg_genel':'Genel İSG','isg_is_giris':'İşe Giriş','isg_acil':'Acil Durum',
+  'isg_kisisel':'KKD','isg_ozel':'Özel','toolbox':'Toolbox','isg_yenileme':'Yenileme'
+};
+
+function zeRenderListe(calisanlar) {
+  const liste = document.getElementById('ze-liste');
+  let filtreli = calisanlar;
+  if (_zeFiltre === 'eksik') filtreli = calisanlar.filter(c => c.eksik_sayisi > 0);
+  else if (_zeFiltre === 'hic') filtreli = calisanlar.filter(c => c.egitimler.every(e => e.durum === 'hic_alinmadi'));
+  else if (_zeFiltre === 'tamam') filtreli = calisanlar.filter(c => c.eksik_sayisi === 0);
+
+  const topluBtn = document.getElementById('ze-toplu-btn');
+  if (topluBtn) topluBtn.style.display = filtreli.some(c=>c.eksik_sayisi>0) ? 'block' : 'none';
+
+  if (!filtreli.length) {
+    liste.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>Bu filtrede çalışan yok</div>';
+    return;
+  }
+
+  liste.innerHTML = filtreli.map(c => {
+    const eksikEgitimler = c.egitimler.filter(e => e.durum !== 'guncel');
+    const tamam          = c.egitimler.filter(e => e.durum === 'guncel');
+
+    const egitimSatirlari = eksikEgitimler.map(e => {
+      const d = zeDurumRenk[e.durum] || zeDurumRenk['hic_alinmadi'];
+      const katBg = zeKatRenk[e.kategori] || '#f1efe8';
+      const periyotLabel = e.periyot_ay === 0 ? 'Bir kez' : e.periyot_ay === 1 ? 'Aylık' : `${e.periyot_ay} ayda bir`;
+      const kalanLabel   = e.kalan_gun != null
+        ? (e.kalan_gun < 0 ? `${Math.abs(e.kalan_gun)} gün geçti` : `${e.kalan_gun} gün kaldı`)
+        : '';
+      const gonderBtn = c.telegram_id
+        ? `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 10px"
+            onclick="zeGonder(['${c.telegram_id}'],'${e.zon_id}','${e.baslik.replace(/'/g,"\'")}')">
+            📤 Gönder</button>`
+        : `<span style="font-size:11px;color:var(--muted)">Telegram yok</span>`;
+
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:${d.bg};border-radius:8px">
+        <span style="font-size:14px;color:${d.c};flex-shrink:0">${d.ikon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.baslik}</div>
+          <div style="font-size:11px;color:var(--muted)">
+            <span style="background:${katBg};padding:1px 6px;border-radius:4px;margin-right:6px">${zeKatYazi[e.kategori]||e.kategori}</span>
+            ${periyotLabel}
+            ${e.son_alinma ? ` · Son: ${e.son_alinma}` : ''}
+            ${kalanLabel ? ` · ${kalanLabel}` : ''}
+          </div>
+        </div>
+        ${gonderBtn}
+      </div>`;
+    }).join('');
+
+    const tamamText = tamam.length ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ ${tamam.length} eğitim güncel</div>` : '';
+    const rozetRenk = c.eksik_sayisi > 0 ? 'var(--red)' : 'var(--green)';
+    const rozetBg   = c.eksik_sayisi > 0 ? '#fdecea' : '#e8f7f0';
+
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:${eksikEgitimler.length?'1px solid var(--border)':'none'}">
+        <input type="checkbox" class="ze-chk" value="${c.telegram_id}" style="width:16px;height:16px;flex-shrink:0">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px">${c.ad_soyad}</div>
+          <div style="font-size:12px;color:var(--muted)">${c.gorev||'Görev belirtilmemiş'}</div>
+        </div>
+        <span style="background:${rozetBg};color:${rozetRenk};border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600">
+          ${c.eksik_sayisi > 0 ? `${c.eksik_sayisi} eksik` : 'Uyumlu'}
+        </span>
+        ${c.eksik_sayisi > 0 ? `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="zeGonder(['${c.telegram_id}'],null,'Zorunlu İSG Eğitimleri')">📤 Hepsini Gönder</button>` : ''}
+      </div>
+      ${eksikEgitimler.length ? `<div style="padding:10px 14px">${egitimSatirlari}${tamamText}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function zeGonder(telegramIdler, egitimId, konu) {
+  if (!telegramIdler || !telegramIdler.length) { alert('Çalışan seçin'); return; }
+  const onay = confirm(`${telegramIdler.length} kişiye "${konu}" eğitimi gönderilecek. Onaylıyor musunuz?`);
+  if (!onay) return;
+  try {
+    const r = await fetch('/panel/isg/zorunlu-egitim-gonder', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        firma_id: aktifFirma,
+        egitim_id: egitimId || '',
+        konu: konu,
+        telegram_idler: telegramIdler.filter(Boolean)
+      })
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      alert(`✅ ${d.gonderilen} kişiye gönderildi${d.gonderilemeyen > 0 ? `, ${d.gonderilemeyen} kişiye gönderilemedi` : ''}.`);
+    } else {
+      alert('Hata: ' + (d.hata || ''));
+    }
+  } catch(e) { alert('Bağlantı hatası'); }
+}
+
+async function zeTopluGonder() {
+  const secili = [...document.querySelectorAll('.ze-chk:checked')].map(c => c.value).filter(Boolean);
+  if (!secili.length) { alert('Önce çalışan seçin'); return; }
+  await zeGonder(secili, null, 'Zorunlu İSG Eğitimleri');
+}
 
 // ── Eğitim Alt Sekme ──────────────────────────────────────────
 function egitimAltSekme(ad, el) {
