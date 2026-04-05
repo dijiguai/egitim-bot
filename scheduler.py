@@ -205,17 +205,35 @@ def zamanlayici_baslat(app):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        # Haftalık bildirimlerin bugün gönderilip gönderilmediğini takip et
+        son_haftalik_gun = None
+
         while True:
             try:
                 simdi = simdi_tr()
-                bugun_08 = simdi.replace(hour=8, minute=0, second=0, microsecond=0)
-                bugun_17 = simdi.replace(hour=17, minute=0, second=0, microsecond=0)
+                bugun_08 = simdi.replace(hour=8,  minute=0,  second=0, microsecond=0)
+                bugun_14 = simdi.replace(hour=14, minute=0,  second=0, microsecond=0)
+                bugun_17 = simdi.replace(hour=17, minute=0,  second=0, microsecond=0)
+                # Haftalık: Pazartesi 08:30, 09:00, 09:15
+                bugun_0830 = simdi.replace(hour=8,  minute=30, second=0, microsecond=0)
+                bugun_0900 = simdi.replace(hour=9,  minute=0,  second=0, microsecond=0)
+                bugun_0915 = simdi.replace(hour=9,  minute=15, second=0, microsecond=0)
 
                 tetikleyiciler = []
                 if simdi < bugun_08:
                     tetikleyiciler.append((bugun_08, "ac"))
+                if simdi < bugun_14:
+                    tetikleyiciler.append((bugun_14, "hatirlat"))
                 if simdi < bugun_17:
                     tetikleyiciler.append((bugun_17, "kapat"))
+                # Pazartesi bildirimleri
+                if simdi.weekday() == 0 and son_haftalik_gun != simdi.date():
+                    if simdi < bugun_0830:
+                        tetikleyiciler.append((bugun_0830, "haftalik_ozet"))
+                    if simdi < bugun_0900:
+                        tetikleyiciler.append((bugun_0900, "sozlesme_uyari"))
+                    if simdi < bugun_0915:
+                        tetikleyiciler.append((bugun_0915, "zorunlu_uyari"))
 
                 if not tetikleyiciler:
                     yarin_08 = bugun_08 + timedelta(days=1)
@@ -229,12 +247,40 @@ def zamanlayici_baslat(app):
 
                 if hedef_is == "ac":
                     loop.run_until_complete(egitim_baslat(app))
-                else:
+                elif hedef_is == "kapat":
                     loop.run_until_complete(egitim_kapat(app))
+                elif hedef_is == "hatirlat":
+                    try:
+                        # Gün içi tamamlamayan hatırlatma (opsiyonel)
+                        logger.info("14:00 hatırlatma tetiklendi")
+                    except Exception as e:
+                        logger.error(f"Hatirlatma hatasi: {e}")
+                elif hedef_is == "haftalik_ozet":
+                    try:
+                        from isg.hatirlatmalar import haftalik_egitim_ozeti
+                        n = loop.run_until_complete(haftalik_egitim_ozeti(app))
+                        logger.info(f"Haftalik ozet: {n} mesaj gonderildi")
+                        son_haftalik_gun = simdi.date()
+                    except Exception as e:
+                        logger.error(f"Haftalik ozet hatasi: {e}")
+                elif hedef_is == "sozlesme_uyari":
+                    try:
+                        from isg.hatirlatmalar import uzman_sozlesme_uyarisi
+                        n = loop.run_until_complete(uzman_sozlesme_uyarisi(app))
+                        logger.info(f"Sozlesme uyarisi: {n} mesaj gonderildi")
+                    except Exception as e:
+                        logger.error(f"Sozlesme uyari hatasi: {e}")
+                elif hedef_is == "zorunlu_uyari":
+                    try:
+                        from isg.hatirlatmalar import aylik_zorunlu_kontrol
+                        n = loop.run_until_complete(aylik_zorunlu_kontrol(app))
+                        logger.info(f"Zorunlu egitim uyarisi: {n} mesaj gonderildi")
+                    except Exception as e:
+                        logger.error(f"Zorunlu egitim uyari hatasi: {e}")
 
             except Exception as e:
                 logger.error(f"Zamanlayici hatasi: {e}")
                 time.sleep(60)
 
     threading.Thread(target=dongu, daemon=True).start()
-    logger.info("Zamanlayici baslatildi (08:00 ac / 17:00 kapat).")
+    logger.info("Zamanlayici baslatildi (08:00 ac / 14:00 hatirlat / 17:00 kapat / Pzt haftalik).")
