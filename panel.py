@@ -4489,6 +4489,21 @@ function calisanAltSekme(ad, el) {
   const panelZorunlu = document.getElementById('cs-panel-zorunlu');
   const tabListe     = document.getElementById('cs-tab-liste');
   const tabZorunlu   = document.getElementById('cs-tab-zorunlu');
+
+  if (ad === 'liste') {
+    if (panelListe)   panelListe.style.display = 'block';
+    if (panelZorunlu) panelZorunlu.style.display = 'none';
+    if (tabListe)   { tabListe.style.borderBottomColor = 'var(--accent)'; tabListe.style.color = 'var(--text)'; tabListe.style.fontWeight = '600'; }
+    if (tabZorunlu) { tabZorunlu.style.borderBottomColor = 'transparent'; tabZorunlu.style.color = 'var(--muted)'; tabZorunlu.style.fontWeight = '500'; }
+  } else {
+    if (panelListe)   panelListe.style.display = 'none';
+    if (panelZorunlu) panelZorunlu.style.display = 'block';
+    if (tabZorunlu) { tabZorunlu.style.borderBottomColor = 'var(--accent)'; tabZorunlu.style.color = 'var(--text)'; tabZorunlu.style.fontWeight = '600'; }
+    if (tabListe)   { tabListe.style.borderBottomColor = 'transparent'; tabListe.style.color = 'var(--muted)'; tabListe.style.fontWeight = '500'; }
+    zeYukle();
+  }
+}
+
 function zeFiltreCalisanGoster(telegramId) {
   // Switch to zorunlu tab and filter for specific calisan
   const tab = document.getElementById('cs-tab-zorunlu');
