@@ -2885,7 +2885,7 @@ async function isgDetayFirmaYukle() {
     if(tehlikeEl) tehlikeEl.value = d.tehlike_sinifi || '';
     if(calisanEl) calisanEl.value = d.aktif_calisan_sayisi || d.calisan_sayisi || '';
     if(bilgiEl && d.aktif_calisan_sayisi !== undefined) {
-      bilgiEl.textContent = '(Sheets'ten: ' + d.aktif_calisan_sayisi + ' aktif çalışan)';
+      bilgiEl.textContent = `(Sheets’ten: ${d.aktif_calisan_sayisi} aktif çalışan)`;
     }
   } catch(e) { console.error('Firma detay yüklenemedi:', e); }
 }
@@ -2909,7 +2909,7 @@ async function isgCalisanSayisiGuncelle() {
     const aktifSayi = (d.calisanlar || []).filter(c => c.aktif !== false && c.aktif !== '0').length;
     const el = document.getElementById('isg-calisan-sayisi');
     if(el) el.value = aktifSayi;
-    if(bilgiEl) bilgiEl.textContent = aktifSayi + ' aktif çalışan (Sheets'ten güncellendi)';
+    if(bilgiEl) bilgiEl.textContent = `${aktifSayi} aktif çalışan (Sheets’ten güncellendi)`;
   } catch(e) {
     if(bilgiEl) bilgiEl.textContent = 'Yüklenemedi';
   }
@@ -3952,7 +3952,7 @@ function zeRenderListe(calisanlar) {
   if (topluBtn) topluBtn.style.display = filtreli.some(c=>c.eksik_sayisi>0) ? 'block' : 'none';
 
   if (!filtreli.length) {
-    liste.innerHTML = '<div class="empty"><div class="empty-icon">\u2705</div>Bu filtrede \u00e7al\u0131\u015fan yok</div>';
+    liste.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>Bu filtrede çalışan yok</div>';
     return;
   }
 
@@ -3963,19 +3963,19 @@ function zeRenderListe(calisanlar) {
     const egitimSatirlari = eksikEgitimler.map(e => {
       const d = zeDurumRenk[e.durum] || zeDurumRenk['hic_alinmadi'];
       const katBg = zeKatRenk[e.kategori] || '#f1efe8';
-      const periyotLabel = e.periyot_ay === 0 ? 'Bir kez' : e.periyot_ay === 1 ? 'Ayl\u0131k' : (e.periyot_ay + ' ayda bir');
+      const periyotLabel = e.periyot_ay === 0 ? 'Bir kez' : e.periyot_ay === 1 ? 'Aylık' : (e.periyot_ay + ' ayda bir');
       const kalanLabel = e.kalan_gun != null
-        ? (e.kalan_gun < 0 ? Math.abs(e.kalan_gun) + ' g\u00fcn ge\u00e7ti' : e.kalan_gun + ' g\u00fcn kald\u0131') : '';
+        ? (e.kalan_gun < 0 ? Math.abs(e.kalan_gun) + ' gün geçti' : e.kalan_gun + ' gün kaldı') : '';
       const adSafe = (c.ad_soyad||'').replace(/\'/g, "&#39;");
       const baslikSafe = (e.baslik||'').replace(/\'/g, "&#39;");
       const gorevSafe = (c.gorev||'').replace(/\'/g, "&#39;");
       const sinavBtn = c.telegram_id
         ? `<button class="btn btn-dark btn-sm" style="font-size:11px;padding:3px 9px"
             onclick="zeGonderVeSinav(['${c.telegram_id}'],'${e.zon_id}','${baslikSafe}','${adSafe}','${gorevSafe}')">
-            \ud83d\udcdd S\u0131nav</button>
+            📝 Sınav</button>
            <button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 9px"
             onclick="zeGonder(['${c.telegram_id}'],'${e.zon_id}','${baslikSafe}')">
-            \ud83d\udce4</button>`
+            📤</button>`
         : '<span style="font-size:11px;color:var(--muted)">TG yok</span>';
 
       return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:${d.bg};border-radius:8px">
@@ -3994,7 +3994,7 @@ function zeRenderListe(calisanlar) {
     }).join('');
 
     const tamamText = tamam.length
-      ? `<div style="font-size:11px;color:var(--green);padding:6px 10px;background:#f0faf5;border-radius:6px;margin-top:6px">\u2713 ${tamam.map(e=>e.baslik).join(' \u00b7 ')}</div>`
+      ? `<div style="font-size:11px;color:var(--green);padding:6px 10px;background:#f0faf5;border-radius:6px;margin-top:6px">✓ ${tamam.map(e=>e.baslik).join(' · ')}</div>`
       : '';
     const rozetRenk = c.eksik_sayisi > 0 ? 'var(--red)' : 'var(--green)';
     const rozetBg   = c.eksik_sayisi > 0 ? '#fdecea' : '#e8f7f0';
@@ -4004,13 +4004,13 @@ function zeRenderListe(calisanlar) {
         <input type="checkbox" class="ze-chk" value="${c.telegram_id}" style="width:16px;height:16px;flex-shrink:0">
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px">${c.ad_soyad}</div>
-          <div style="font-size:12px;color:var(--muted)">${c.gorev||'G\u00f6rev belirtilmemi\u015f'}</div>
+          <div style="font-size:12px;color:var(--muted)">${c.gorev||'Görev belirtilmemiş'}</div>
         </div>
         <span style="background:${rozetBg};color:${rozetRenk};border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;flex-shrink:0">
-          ${c.eksik_sayisi > 0 ? c.eksik_sayisi+' eksik' : 'Uyumlu \u2713'}
+          ${c.eksik_sayisi > 0 ? c.eksik_sayisi+' eksik' : 'Uyumlu ✓'}
         </span>
         ${c.eksik_sayisi > 0 ? `<button class="btn btn-primary btn-sm" style="font-size:11px;flex-shrink:0"
-          onclick="zeGonder(['${c.telegram_id}'],null,'Zorunlu \u0130SG E\u011fitimleri')">\ud83d\udce4 T\u00fcm\u00fcn\u00fc G\u00f6nder</button>` : ''}
+          onclick="zeGonder(['${c.telegram_id}'],null,'Zorunlu İSG Eğitimleri')"> Tümünü Gönder</button>` : ''}
       </div>
       ${eksikEgitimler.length ? `<div style="padding:10px 14px">${egitimSatirlari}${tamamText}</div>` : ''}
     </div>`;
@@ -5977,7 +5977,7 @@ def api_toplu_egitim_katilmayana():
 
     egitim = EGITIMLER.get(egitim_id)
     if not egitim:
-        # Sheets'ten dene
+        # Sheets’ten dene
         try:
             from egitimler_sheets import tum_egitimler
             egitim = tum_egitimler().get(egitim_id)
