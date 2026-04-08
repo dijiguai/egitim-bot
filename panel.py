@@ -31,6 +31,10 @@ HTML = r"""
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<!-- v1775673950 -->
 <title>Eğitim Yönetici Paneli</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -4780,13 +4784,18 @@ async function takvimKatilmayanlaraGonder(egitimId, idler, btn) {
 
 @app.route("/panel")
 def panel():
-    return render_template_string(
+    from flask import make_response
+    resp = make_response(render_template_string(
         HTML,
         logged_in=session.get("panel_giris", False),
         hata=False,
         uzman_profil=session.get("uzman_profil"),
         profil_secimi=session.get("profil_secimi"),
-    )
+    ))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 @app.route("/panel/login", methods=["POST"])
 def login():
