@@ -35,7 +35,7 @@ HTML = r"""
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <!-- v1775673950 -->
-<title>Eğitim Yönetici Paneli</title>
+<title>Eğitim Paneli v1775675017</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1117,6 +1117,7 @@ function firmaSayfasiFiltreToggle() {
 }
 
 async function firmaKartlariniYukle() {
+  console.log('[EgitimPanel] firmaKartlariniYukle v2 - yeni versiyon');
   const konteyner = document.getElementById('firma-kartlari');
   const altEl = document.getElementById('firma-sayfa-alt');
   konteyner.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -4781,6 +4782,10 @@ async function takvimKatilmayanlaraGonder(egitimId, idler, btn) {
 </body>
 </html>
 """
+
+@app.route("/panel/version")
+def panel_version():
+    return "1775675006", 200, {"Content-Type": "text/plain"}
 
 @app.route("/panel")
 def panel():
