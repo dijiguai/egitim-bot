@@ -455,23 +455,46 @@ async function ukKaydet() {
 
     <!-- ZORUNLU EĞİTİMLER PANELİ -->
     <div id="cs-panel-zorunlu" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <!-- Başlık + Filtreler -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:15px;font-weight:700">Zorunlu İSG Eğitimleri</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px" id="ze-firma-bilgi">6331 sayılı İSG Kanunu kapsamında zorunlu eğitimler</div>
+          <div style="font-size:15px;font-weight:700">⚠️ Zorunlu İSG Eğitimleri</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">6331 sayılı Kanun kapsamında mevzuat zorunlu eğitim listesi</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-dark btn-sm" id="ze-f-tum" onclick="zeFiltre('tum',this)" style="background:var(--accent);color:#fff;border:none">Tümü</button>
-          <button class="btn btn-dark btn-sm" id="ze-f-eksik" onclick="zeFiltre('eksik',this)">Eksik Var</button>
-          <button class="btn btn-dark btn-sm" id="ze-f-hic" onclick="zeFiltre('hic',this)">Hiç Almamış</button>
-          <button class="btn btn-dark btn-sm" id="ze-f-tamam" onclick="zeFiltre('tamam',this)">Uyumlu</button>
-          <button class="btn btn-primary btn-sm" id="ze-toplu-btn" onclick="zeTopluGonder()" style="display:none">📤 Seçililere Gönder</button>
           <button class="btn btn-dark btn-sm" onclick="zeYukle()">🔄 Yenile</button>
+          <button class="btn btn-primary btn-sm" onclick="zeTehlikeModalAc()">⚙️ Tehlike Sınıfı</button>
         </div>
       </div>
-      <div id="ze-yukleniyor" style="text-align:center;padding:40px;display:none"><div class="spinner" style="margin:0 auto 12px"></div>Yükleniyor...</div>
+
+      <!-- Yükleniyor -->
+      <div id="ze-yukleniyor" style="text-align:center;padding:30px;display:none">
+        <div class="spinner" style="margin:0 auto 12px"></div>Yükleniyor...
+      </div>
+
+      <!-- Özet Kartlar (tehlike tanımlıysa) -->
       <div id="ze-ozet" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px"></div>
-      <div id="ze-liste"></div>
+
+      <!-- Çalışan Takip Bölümü (tehlike tanımlıysa) -->
+      <div id="ze-calisan-takip-wrap">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:600">👥 Çalışan Bazlı Takip</div>
+          <div style="display:flex;gap:4px;margin-left:auto">
+            <button class="btn btn-dark btn-sm" id="ze-f-tum" onclick="zeFiltre('tum',this)" style="background:var(--accent);color:#fff;border:none;font-size:11px">Tümü</button>
+            <button class="btn btn-dark btn-sm" id="ze-f-eksik" onclick="zeFiltre('eksik',this)" style="font-size:11px">Eksik</button>
+            <button class="btn btn-dark btn-sm" id="ze-f-hic" onclick="zeFiltre('hic',this)" style="font-size:11px">Hiç Almamış</button>
+            <button class="btn btn-dark btn-sm" id="ze-f-tamam" onclick="zeFiltre('tamam',this)" style="font-size:11px">Uyumlu</button>
+            <button class="btn btn-primary btn-sm" id="ze-toplu-btn" onclick="zeTopluGonder()" style="display:none;font-size:11px">📤 Seçililere Gönder</button>
+          </div>
+        </div>
+        <div id="ze-liste"></div>
+      </div>
+
+      <!-- Eğitim Kataloğu (her zaman görünür) -->
+      <div style="margin-top:24px;padding-top:16px;border-top:2px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px">📚 Mevzuat Eğitim Kataloğu</div>
+        <div id="ze-katalog"></div>
+      </div>
     </div>
   </div>
 
@@ -1725,6 +1748,32 @@ async function calisanListesiYukle() {
   }
 }
 
+// ISG özetini arka planda yükle ve kartlara yansıt
+async function calisanIsgOzetYukle() {
+  if (!aktifFirma) return;
+  try {
+    const r = await fetch(`/panel/api/calisan-isg-ozet?firma_id=${encodeURIComponent(aktifFirma)}`);
+    const d = await r.json();
+    if (!d.calisanlar) return;
+    // Tehlike yoksa tüm rozetleri gizle
+    if (!d.tehlike) {
+      document.querySelectorAll('.isg-rozet-badge').forEach(el => el.style.display = 'none');
+      return;
+    }
+    // Her çalışan için rozeti güncelle
+    Object.entries(d.calisanlar).forEach(([tid, isg]) => {
+      const badge = document.getElementById(`isg-rozet-${tid}`);
+      if (!badge) return;
+      const pct = isg.isg_toplam > 0 ? Math.round(isg.isg_tamamlanan / isg.isg_toplam * 100) : 0;
+      const renk = pct === 100 ? 'var(--green)' : pct >= 60 ? '#856404' : 'var(--red)';
+      const bg   = pct === 100 ? '#e8f7f0' : pct >= 60 ? '#fff8e6' : '#fdecea';
+      badge.style.background = bg;
+      badge.querySelector('.isg-rozet-sayi').style.color = renk;
+      badge.querySelector('.isg-rozet-sayi').textContent = `${isg.isg_tamamlanan}/${isg.isg_toplam}`;
+    });
+  } catch(e) { /* sessiz hata */ }
+}
+
 function renderCalisanlar(calisanlar) {
   if(!calisanlar.length){
     document.getElementById('calisan-liste').innerHTML='<div class="empty"><div class="empty-icon">👥</div>Henüz çalışan eklenmemiş<br><br><button class="btn btn-primary" onclick="calisanModalAc()">+ İlk Çalışanı Ekle</button></div>';
@@ -1750,11 +1799,11 @@ function renderCalisanlar(calisanlar) {
           ${c.telegram_id > 0 ? `<div class="calisan-id">TG: ${c.telegram_id}</div>` : '<div class="calisan-id" style="color:#e67e22">⚠ Telegram bağlı değil</div>'}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-          ${c.isg_toplam > 0 ? `
-          <div style="background:${isgBg};border-radius:8px;padding:4px 10px;text-align:center;min-width:72px">
-            <div style="font-size:16px;font-weight:800;color:${isgRenk}">${c.isg_tamamlanan||0}/${c.isg_toplam||0}</div>
-            <div style="font-size:9px;color:${isgRenk}">Zorunlu Eğt.</div>
-          </div>` : ''}
+          <div id="isg-rozet-${c.telegram_id}" class="isg-rozet-badge"
+          style="background:#f5f3ef;border-radius:8px;padding:4px 10px;text-align:center;min-width:72px">
+          <div class="isg-rozet-sayi" style="font-size:16px;font-weight:800;color:var(--muted)">—/—</div>
+          <div style="font-size:9px;color:var(--muted)">Zorunlu Eğt.</div>
+        </div>
         </div>
       </div>
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
@@ -1781,6 +1830,8 @@ function renderCalisanlar(calisanlar) {
       </div>
     </div>`;
   }).join('');
+  // ISG özetini arka planda yükle (performans için ayrı)
+  setTimeout(calisanIsgOzetYukle, 300);
 }
 
 function calisanModalAc() {
@@ -3939,12 +3990,28 @@ async function zeYukle() {
       return;
     }
     if (!d.tehlike) {
-      document.getElementById('ze-liste').innerHTML = `<div class="empty"><div class="empty-icon">📋</div><b>Tehlike sınıfı tanımlanmamış</b><br><small>Önce Firma ISG Detayı sekmesinden tehlike sınıfını girin.</small></div>`;
+      // Tehlike sınıfı yok — yine de eğitim kataloğunu göster
+      document.getElementById('ze-ozet').innerHTML = `
+        <div style="grid-column:1/-1;background:#fff8e6;border:1px solid #f5d87a;border-radius:10px;padding:14px">
+          <div style="font-weight:600;color:#856404;margin-bottom:4px">⚠️ Tehlike Sınıfı Tanımlanmamış</div>
+          <div style="font-size:13px;color:var(--muted)">Firma ISG Detayı sekmesinden tehlike sınıfı girerek kişi bazlı eğitim takibi başlatın.</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="zeTehlikeModalAc()">+ Tehlike Sınıfı Gir</button>
+        </div>`;
+      const takipEl = document.getElementById('ze-calisan-takip-wrap');
+      if (takipEl) takipEl.style.display = 'none';
+      const zeListeEl = document.getElementById('ze-liste');
+      if (zeListeEl) zeListeEl.innerHTML = '';
+      const zeOzetEl = document.getElementById('ze-ozet');
+      if (zeOzetEl) zeOzetEl.innerHTML = '';
+      zeEgitimKatalogGoster('');
       return;
     }
+    document.getElementById('ze-calisan-takip-wrap').style.display = 'block';
     _zeVeri = d;
     zeRenderOzet(d.ozet, d.tehlike);
     zeRenderListe(d.calisanlar);
+    // Ayrıca eğitim kataloğunu göster
+    setTimeout(() => zeEgitimKatalogGoster(d.tehlike), 50);
   } catch(e) {
     document.getElementById('ze-yukleniyor').style.display = 'none';
     document.getElementById('ze-liste').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>Bağlantı hatası</div>`;
@@ -3955,6 +4022,8 @@ function zeRenderOzet(ozet, tehlike) {
   if (!ozet) return;
   const tehlikeRenk = {'Çok Tehlikeli':'var(--red)','Tehlikeli':'#856404','Az Tehlikeli':'var(--green)'};
   const tr = tehlikeRenk[tehlike] || 'var(--muted)';
+  // Tüm değerler 0 ise uyarı göster
+  const hepsiSifir = !ozet.toplam_calisan && !ozet.tam_uyumlu && !ozet.eksik_var && !ozet.hic_almamis;
   document.getElementById('ze-ozet').innerHTML = `
     <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
       <div style="font-size:22px;font-weight:800;font-family:'Syne',sans-serif">${ozet.toplam_calisan||0}</div>
@@ -4144,6 +4213,184 @@ async function uzmanAtaModalAc(firma_id, firma_ad) {
       firmaKartlariniYukle();
     } else { alert('Atama hatası: ' + (d.hata||'')); }
   } catch(e) { alert('Bağlantı hatası: ' + e.message); }
+}
+
+
+// ── ISG EĞİTİM KATALOĞU (Mevzuata Uygun) ─────────────────────
+const ISG_EGITIM_KATALOGU = [
+  // A) İşe Giriş
+  {
+    id:"kat_ise_giris", grup:"İşe Giriş / Oryantasyon", renk:"#e8f7f0", emoji:"🏁",
+    egitimler:[
+      {id:"zon_giris_oryantasyon", baslik:"İşe Giriş İSG Oryantasyonu", sure:120, periyot:"İşe girişte (1 kez)", tur:"isg_is_giris",
+       yasal:"6331 Md.17 | İSG Eğitim Yön. Md.5", kapsam:"Tüm işe yeni başlayanlar",
+       icerik:"İşyeri tanıtımı, acil çıkışlar, toplanma noktası, KKD tanıtımı, temel güvenlik kuralları"},
+      {id:"kat_risk_bilg", baslik:"Risk Değerlendirmesi Bilgilendirmesi", sure:60, periyot:"Yılda 1 kez", tur:"isg_genel",
+       yasal:"6331 Md.10 | RD Yönetmeliği", kapsam:"Tüm çalışanlar",
+       icerik:"Tehlike-risk tanımları, çalışma ortamındaki riskler, korunma yöntemleri"},
+    ]
+  },
+  // B) Genel ISG
+  {
+    id:"kat_genel_isg", grup:"Genel İSG Eğitimleri", renk:"#e6f1fb", emoji:"🛡️",
+    egitimler:[
+      {id:"zon_genel_isg_hukuk", baslik:"İSG Yasal Haklar ve Sorumluluklar", sure:60, periyot:"Yılda 1 kez", tur:"isg_genel",
+       yasal:"6331 Md.17 | İSG Eğitim Yönetmeliği Ek-1", kapsam:"Tüm çalışanlar",
+       icerik:"6331 sayılı Kanun kapsamı, çalışan hakları, işveren yükümlülükleri, iş durdurma hakkı"},
+      {id:"zon_genel_tehlike_risk", baslik:"İşyeri Tehlikeleri ve Risk Değerlendirmesi", sure:60, periyot:"Yılda 1 kez", tur:"isg_genel",
+       yasal:"6331 Md.10-17 | RD Yönetmeliği", kapsam:"Tüm çalışanlar",
+       icerik:"Tehlike türleri, risk matrisi, fiziksel-kimyasal-biyolojik-ergonomik-psikososyal riskler"},
+      {id:"zon_genel_kaza_meslek", baslik:"Kaza ve Meslek Hastalığı Bildirimi", sure:45, periyot:"2 yılda 1 kez", tur:"isg_genel",
+       yasal:"6331 Md.14-17 | İSG Kayıt Yönetmeliği", kapsam:"Tüm çalışanlar",
+       icerik:"İş kazası tanımı ve bildirimi (3 iş günü), meslek hastalığı, ramak kala kayıt"},
+    ]
+  },
+  // C) Acil Durum
+  {
+    id:"kat_acil", grup:"Acil Durum ve Tahliye", renk:"#fdecea", emoji:"🚨",
+    egitimler:[
+      {id:"zon_acil_tahliye", baslik:"Yangın ve Acil Tahliye Eğitimi", sure:90, periyot:"Yılda 1 kez (tatbikat)", tur:"isg_acil",
+       yasal:"BYKHY | 6331 Md.11 | İSG Eğitim Yön.", kapsam:"Tüm çalışanlar",
+       icerik:"Yangın türleri (A/B/C), söndürücü kullanımı, tahliye prosedürü, toplanma noktası, duman güvenliği"},
+      {id:"zon_ilk_yardim", baslik:"İlk Yardım Temel Eğitimi", sure:60, periyot:"Yılda 1 kez", tur:"isg_acil",
+       yasal:"6331 Md.11 | İlk Yardım Yönetmeliği", kapsam:"Tüm çalışanlar (ilk yardımcılar: 16 saat sertifika)",
+       icerik:"KPR, bilinç değerlendirmesi, yara-kanama, kimyasal yanık, şok, elektrik çarpması müdahalesi"},
+    ]
+  },
+  // D) KKD
+  {
+    id:"kat_kkd", grup:"KKD Kullanım Eğitimi", renk:"#fff8e6", emoji:"🦺",
+    egitimler:[
+      {id:"zon_kkd", baslik:"KKD Seçimi, Kullanımı ve Bakımı", sure:60, periyot:"Yılda 1 kez + her yeni KKD'de", tur:"isg_kisisel",
+       yasal:"KKD Yönetmeliği 2016/425/AB | 6331 Md.17", kapsam:"Tüm çalışanlar",
+       icerik:"Baret, gözlük, maske (FFP2/FFP3), eldiven, emniyet kemeri seçimi, doğru kullanım ve bakım"},
+    ]
+  },
+  // E) Tehlike Sınıfına Özgü
+  {
+    id:"kat_ozel", grup:"İşe / Tehlikeye Özgü Eğitimler", renk:"#fbeaf0", emoji:"⚡",
+    egitimler:[
+      {id:"zon_cimento_toz", baslik:"Toz ve Solunum Sağlığı (Çimento/Maden)", sure:60, periyot:"Yılda 1 kez", tur:"isg_ozel",
+       yasal:"Kimyasal Maddelerle Çalışmada SGY | 6331 Md.17", kapsam:"Toz maruziyeti olan çalışanlar",
+       icerik:"Silikoz/pnömokonyoz riski, toz ölçümü OEL değerleri, FFP2/FFP3 seçimi, SFT (solunum fonksiyon testi)"},
+      {id:"zon_gurultu", baslik:"Gürültü ve İşitme Kaybı Korunma", sure:60, periyot:"Yılda 1 kez", tur:"isg_ozel",
+       yasal:"Gürültü Yönetmeliği | 6331 Md.17", kapsam:"85 dB üzeri gürültülü ortamda çalışanlar",
+       icerik:"LEX,8h limit değerleri (80/85/87 dB), kulak koruyucu seçimi, odyometri testi"},
+      {id:"zon_cimento_elektrik", baslik:"Elektrik Güvenliği ve LOTO", sure:60, periyot:"Yılda 1 kez", tur:"isg_ozel",
+       yasal:"İş Ekipmanlarının Kullanımı Yön. | 6331 Md.17", kapsam:"Elektrikli ekipman kullanıcıları ve bakım personeli",
+       icerik:"LOTO prosedürü, elektrik çarpması riski, kaçak akım rölesi, topraklama, Ex-proof"},
+      {id:"zon_yuksekte_calisma", baslik:"Yüksekte Çalışma Güvenliği", sure:60, periyot:"Yılda 1 kez", tur:"isg_ozel",
+       yasal:"İş Ekipmanları Yönetmeliği | 6331 Md.17", kapsam:"2 metre ve üzeri çalışanlar",
+       icerik:"Emniyet kemeri ve tam vücut kemeri, ankraj, iskele güvenliği, meteorolojik koşullar"},
+      {id:"zon_makine_ekipman", baslik:"El Aletleri ve Makine Güvenliği", sure:60, periyot:"Yeni ekipmanda + yılda 1 kez", tur:"isg_ozel",
+       yasal:"İş Ekipmanlarının Kullanımı Yön. | 6331 Md.17", kapsam:"Makine/alet kullanan tüm çalışanlar",
+       icerik:"Taşlama, matkap, basınçlı hava, koruyucu elemanlar, alet kontrol prosedürü"},
+    ]
+  },
+  // F) Toolbox
+  {
+    id:"kat_toolbox", grup:"Toolbox / Günlük Güvenlik", renk:"#f1efe8", emoji:"🔧",
+    egitimler:[
+      {id:"toolbox", baslik:"Toolbox Meeting (Günlük/Vardiya Güvenlik Toplantısı)", sure:15, periyot:"Her vardiya / Günlük", tur:"toolbox",
+       yasal:"6331 Md.17 | İSG Eğitim Yönetmeliği", kapsam:"Tüm çalışanlar",
+       icerik:"Günün tehlikeleri, son olaylar (ramak kala), KKD kontrolü, görev bazlı güvenlik talimatları"},
+    ]
+  },
+];
+
+function zeTehlikeModalAc() {
+  // Aktif firmaya tehlike sınıfı gir
+  if (!aktifFirma) return;
+  const tehlike = prompt(
+    "Firma tehlike sınıfını girin:\n\n1 = Az Tehlikeli\n2 = Tehlikeli\n3 = Çok Tehlikeli\n\nNumara girin:"
+  );
+  if (!tehlike) return;
+  const siniflar = {"1":"Az Tehlikeli","2":"Tehlikeli","3":"Çok Tehlikeli"};
+  const sinif = siniflar[tehlike.trim()];
+  if (!sinif) { alert("Geçersiz seçim"); return; }
+  fetch('/panel/isg/firma-detay', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({firma_id: aktifFirma, tehlike_sinifi: sinif})
+  }).then(r=>r.json()).then(d=>{
+    if (d.basarili) { alert("✅ Tehlike sınıfı kaydedildi: " + sinif); zeYukle(); }
+    else alert("Hata: " + (d.hata||""));
+  }).catch(()=>alert("Bağlantı hatası"));
+}
+
+function zeEgitimKatalogGoster(tehlike) {
+  // Tehlike sınıfına göre filtrelenmiş eğitim kataloğunu göster
+  // tehlike yoksa tüm katalog gösterilir
+  const zeEl = document.getElementById('ze-katalog') || document.getElementById('ze-liste');
+  if (!zeEl) return;
+
+  const tehlikeFiltre = {
+    "Az Tehlikeli": ["kat_ise_giris","kat_genel_isg","kat_acil","kat_kkd","kat_toolbox"],
+    "Tehlikeli":    ["kat_ise_giris","kat_genel_isg","kat_acil","kat_kkd","kat_ozel","kat_toolbox"],
+    "Çok Tehlikeli":["kat_ise_giris","kat_genel_isg","kat_acil","kat_kkd","kat_ozel","kat_toolbox"],
+    "":             ISG_EGITIM_KATALOGU.map(g=>g.id)
+  };
+  const aktifGruplar = new Set(tehlikeFiltre[tehlike] || tehlikeFiltre[""]);
+
+  zeEl.innerHTML = ISG_EGITIM_KATALOGU
+    .filter(g => aktifGruplar.has(g.id))
+    .map(g => `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:18px">${g.emoji}</span>
+        <div style="font-weight:700;font-size:14px">${g.grup}</div>
+      </div>
+      ${g.egitimler.map(e => `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px">
+          <div style="width:6px;height:40px;background:${g.renk};border-radius:3px;flex-shrink:0;filter:brightness(0.7)"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:13px">${e.baslik}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">
+              <span>⏱ ${e.sure} dk</span>
+              <span>🔄 ${e.periyot}</span>
+              <span>📋 ${e.kapsam}</span>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">⚖️ ${e.yasal}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-dark btn-sm" style="font-size:11px" onclick="zeKatalogDetay('${e.id}',this)">📖</button>
+            <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="zeKatalogEgitimGonder('${e.id}','${e.baslik}','${e.tur}')">📤 Gönder</button>
+          </div>
+        </div>
+        <div id="ze-katalog-detay-${e.id}" style="display:none;padding:0 14px 12px 32px;font-size:12px;color:var(--muted)">
+          <strong>İçerik:</strong> ${e.icerik}
+        </div>
+      </div>`).join('')}
+    </div>`).join('');
+}
+
+function zeKatalogDetay(zon_id, btn) {
+  const el = document.getElementById('ze-katalog-detay-' + zon_id);
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? '📖' : '🔼';
+}
+
+async function zeKatalogEgitimGonder(zon_id, baslik, tur) {
+  if (!aktifFirma) { alert('Önce firma seçin'); return; }
+  // Gönderilecek çalışanları seç
+  if (!_zeVeri || !_zeVeri.calisanlar) {
+    const onay = confirm(`"${baslik}" eğitimini tüm çalışanlara göndermek ister misiniz?`);
+    if (!onay) return;
+    await zeGonder([], zon_id, baslik);
+    return;
+  }
+  const hedefler = _zeVeri.calisanlar
+    .filter(c => c.telegram_id && c.egitimler.find(e => e.zon_id === zon_id && e.durum !== 'guncel'))
+    .map(c => c.telegram_id);
+  if (hedefler.length === 0) {
+    alert('Bu eğitim tüm çalışanlar için güncel!');
+    return;
+  }
+  const onay = confirm(`"${baslik}" eğitimi ${hedefler.length} kişiye gönderilecek.\n(Eksik/süresi dolmuş olanlar)\n\nDevam?`);
+  if (!onay) return;
+  await zeGonder(hedefler, zon_id, baslik);
 }
 
 function calisanAltSekme(ad, el) {
@@ -4602,16 +4849,57 @@ def api_uzman_firmalari():
                     "tam_zamanli": u.get("tam_zamanli", False),
                 }
 
+            # Atanmış uzman bilgisi (bu firmaya)
+            uzman_bilgi_firma = {}
+            try:
+                from isg.uzmanlar import uzman_getir
+                atama_firma = next((dict(zip(ATAMA_BASLIKLAR,s)) for s in atamalar
+                                    if len(s)>=len(ATAMA_BASLIKLAR)
+                                    and dict(zip(ATAMA_BASLIKLAR,s)).get("firma_id")==firma_id
+                                    and dict(zip(ATAMA_BASLIKLAR,s)).get("aktif","1")=="1"), None)
+                if atama_firma:
+                    u = uzman_getir(atama_firma.get("uzman_id","")) or {}
+                    aylik_dk = sure_ozet.get("uzman_aylik_dk", 0) or 0
+                    uzman_bilgi_firma = {
+                        "ad": u.get("ad_soyad",""),
+                        "sinif": u.get("sinif",""),
+                        "aylik_dk": aylik_dk if not sure_ozet.get("tam_zamanli") else "Tam Zamanlı",
+                    }
+            except:
+                pass
+
+            # Bugün ve toplam kayıt
+            try:
+                from sheets import tum_kayitlar_getir
+                from datetime import date
+                bugun = date.today().strftime("%d.%m.%Y")
+                kayitlar = tum_kayitlar_getir(firma_id)
+                bugun_gecti = sum(1 for k in kayitlar if k.get("tarih")==bugun and k.get("durum") in ("GECTI","GECTİ"))
+                toplam_kayit = len(kayitlar)
+            except:
+                bugun_gecti = 0
+                toplam_kayit = 0
+
+            try:
+                from calisanlar import tum_calisanlar as _tc
+                _calisanlar = _tc(firma_id=firma_id)
+                aktif_sayi = len(_calisanlar)
+            except:
+                aktif_sayi = calisan
+
             sonuc.append({
                 "firma_id":      firma_id,
                 "ad":            f.get("ad", firma_id),
                 "grup_id":       f.get("grup_id", ""),
-                "calisan_sayisi": calisan,
+                "calisan_sayisi": aktif_sayi,
                 "tehlike_sinifi": tehlike,
                 "sgk_no":        detay.get("sgk_sicil_no", ""),
                 "nace_kodu":     detay.get("nace_kodu", ""),
                 "sure_ozet":     sure_ozet,
                 "atanmis":       firma_id in uzman_firma_ids,
+                "uzman_bilgi":   uzman_bilgi_firma,
+                "bugun_tamamlayan": bugun_gecti,
+                "toplam_kayit":  toplam_kayit,
             })
 
         return jsonify(sonuc)
@@ -4715,21 +5003,9 @@ def api_calisanlar():
         calisan_kayitlar = [k for k in tum_kayitlar if str(k.get("telegram_id","")) == str(tid)]
         son_egitim = calisan_kayitlar[-1].get("tarih","") if calisan_kayitlar else ""
 
-        # ISG zorunlu eğitim sayısı (hızlı hesap — tam analiz zeYukle'de)
+        # ISG hesabı calisan bazlı endpoint'te yapılır (calisanlar API hızlı kalsın)
         isg_tamamlanan = 0
         isg_toplam = 0
-        try:
-            from isg.zorunlu_egitim import tehlike_icin_zorunlu_egitimler, calisan_eksik_egitimler
-            from isg.firma_detay import firma_detay_getir
-            fd = firma_detay_getir(firma_id)
-            tehlike = fd.get("tehlike_sinifi", "")
-            if tehlike:
-                zorunlu = tehlike_icin_zorunlu_egitimler(tehlike)
-                isg_toplam = len(zorunlu)
-                eksikler = calisan_eksik_egitimler(tid, firma_id, tehlike)
-                isg_tamamlanan = len([e for e in eksikler if e.get("durum") == "guncel"])
-        except Exception:
-            pass
 
         sonuc.append({
             "telegram_id": tid,
@@ -4748,6 +5024,38 @@ def api_calisanlar():
         })
 
     return jsonify({"calisanlar": sonuc, "bot_username": BOT_USERNAME})
+
+
+@app.route("/panel/api/calisan-isg-ozet")
+def api_calisan_isg_ozet():
+    """Firma çalışanları için hızlı ISG eğitim tamamlanma özeti."""
+    if not session.get("panel_giris"): return jsonify({}), 401
+    firma_id = request.args.get("firma_id", "varsayilan")
+    try:
+        from isg.firma_detay import firma_detay_getir
+        from isg.zorunlu_egitim import tehlike_icin_zorunlu_egitimler, calisan_eksik_egitimler
+        from calisanlar import tum_calisanlar
+
+        fd = firma_detay_getir(firma_id)
+        tehlike = fd.get("tehlike_sinifi", "")
+        if not tehlike:
+            return jsonify({"tehlike": "", "calisanlar": {}})
+
+        zorunlu = tehlike_icin_zorunlu_egitimler(tehlike)
+        isg_toplam = len(zorunlu)
+        calisanlar = tum_calisanlar(firma_id=firma_id)
+        sonuc = {}
+        for tid in calisanlar:
+            try:
+                eksikler = calisan_eksik_egitimler(str(tid), firma_id, tehlike)
+                isg_tamamlanan = len([e for e in eksikler if e.get("durum") == "guncel"])
+            except:
+                isg_tamamlanan = 0
+            sonuc[str(tid)] = {"isg_tamamlanan": isg_tamamlanan, "isg_toplam": isg_toplam}
+        return jsonify({"tehlike": tehlike, "calisanlar": sonuc})
+    except Exception as e:
+        return jsonify({"hata": str(e), "calisanlar": {}})
+
 
 @app.route("/panel/api/calisan-ekle", methods=["POST"])
 def api_calisan_ekle():
