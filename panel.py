@@ -4396,7 +4396,7 @@ async function zeKatalogEgitimGonder(zon_id, baslik, tur) {
     const d = await r.json();
     const calisanlar = (d.calisanlar || []).filter(c => c.telegram_id > 0);
     if (!calisanlar.length) {
-      alert('Telegram ID'li çalışan bulunamadı. Önce çalışanları kaydedin.');
+      alert('Telegram IDli çalışan bulunamadı. Önce çalışanları kaydedin.');
       return;
     }
     zeGonderModalAc(zon_id, baslik, calisanlar);
@@ -4515,23 +4515,6 @@ function zeFiltreCalisanGoster(telegramId) {
       if (filtered.length) zeRenderListe(filtered);
     }
   }, 800);
-}
-
-
-
-  if (ad === 'liste') {
-    if (panelListe)   panelListe.style.display = 'block';
-    if (panelZorunlu) panelZorunlu.style.display = 'none';
-    if (tabListe)   { tabListe.style.borderBottomColor = 'var(--accent)'; tabListe.style.color = 'var(--text)'; tabListe.style.fontWeight = '600'; }
-    if (tabZorunlu) { tabZorunlu.style.borderBottomColor = 'transparent'; tabZorunlu.style.color = 'var(--muted)'; tabZorunlu.style.fontWeight = '500'; }
-  } else {
-    if (panelListe)   panelListe.style.display = 'none';
-    if (panelZorunlu) panelZorunlu.style.display = 'block';
-    if (tabZorunlu) { tabZorunlu.style.borderBottomColor = 'var(--accent)'; tabZorunlu.style.color = 'var(--text)'; tabZorunlu.style.fontWeight = '600'; }
-    if (tabListe)   { tabListe.style.borderBottomColor = 'transparent'; tabListe.style.color = 'var(--muted)'; tabListe.style.fontWeight = '500'; }
-    // Load zorunlu egitimler data
-    zeYukle();
-  }
 }
 
 
