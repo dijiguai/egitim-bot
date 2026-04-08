@@ -461,9 +461,17 @@ async function ukKaydet() {
           <div style="font-size:15px;font-weight:700">⚠️ Zorunlu İSG Eğitimleri</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px">6331 sayılı Kanun kapsamında mevzuat zorunlu eğitim listesi</div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-dark btn-sm" onclick="zeYukle()">🔄 Yenile</button>
-          <button class="btn btn-primary btn-sm" onclick="zeTehlikeModalAc()">⚙️ Tehlike Sınıfı</button>
+        <button class="btn btn-dark btn-sm" onclick="zeYukle()">🔄 Yenile</button>
+      </div>
+
+      <!-- Tehlike sınıfı tanımlı değilse inline seçim -->
+      <div id="ze-tehlike-secim" style="display:none;background:#fff8e6;border:1px solid #f5d87a;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-weight:600;color:#856404;margin-bottom:8px">⚠️ Bu firma için tehlike sınıfı tanımlanmamış</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Zorunlu eğitim takibini başlatmak için tehlike sınıfını seçin:</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-dark" onclick="zeTehlikeKaydet('Az Tehlikeli')" style="border:2px solid #1a8a56;color:#1a8a56;background:transparent">🟢 Az Tehlikeli</button>
+          <button class="btn btn-dark" onclick="zeTehlikeKaydet('Tehlikeli')" style="border:2px solid #856404;color:#856404;background:transparent">🟡 Tehlikeli</button>
+          <button class="btn btn-dark" onclick="zeTehlikeKaydet('Çok Tehlikeli')" style="border:2px solid var(--red);color:var(--red);background:transparent">🔴 Çok Tehlikeli</button>
         </div>
       </div>
 
@@ -4003,10 +4011,17 @@ async function zeYukle() {
       if (zeListeEl) zeListeEl.innerHTML = '';
       const zeOzetEl = document.getElementById('ze-ozet');
       if (zeOzetEl) zeOzetEl.innerHTML = '';
+      // Tehlike sınıfı seçim kutusunu göster
+      const tehlikeSecimEl = document.getElementById('ze-tehlike-secim');
+      if (tehlikeSecimEl) tehlikeSecimEl.style.display = 'block';
       zeEgitimKatalogGoster('');
       return;
     }
-    document.getElementById('ze-calisan-takip-wrap').style.display = 'block';
+    // Tehlike tanımlı — seçim kutusunu gizle
+    const tehlikeSecimEl2 = document.getElementById('ze-tehlike-secim');
+    if (tehlikeSecimEl2) tehlikeSecimEl2.style.display = 'none';
+    const takipEl2 = document.getElementById('ze-calisan-takip-wrap');
+    if (takipEl2) takipEl2.style.display = 'block';
     _zeVeri = d;
     zeRenderOzet(d.ozet, d.tehlike);
     zeRenderListe(d.calisanlar);
@@ -4299,22 +4314,23 @@ const ISG_EGITIM_KATALOGU = [
 ];
 
 function zeTehlikeModalAc() {
-  // Aktif firmaya tehlike sınıfı gir
-  if (!aktifFirma) return;
-  const tehlike = prompt(
-    "Firma tehlike sınıfını girin:\n\n1 = Az Tehlikeli\n2 = Tehlikeli\n3 = Çok Tehlikeli\n\nNumara girin:"
-  );
-  if (!tehlike) return;
-  const siniflar = {"1":"Az Tehlikeli","2":"Tehlikeli","3":"Çok Tehlikeli"};
-  const sinif = siniflar[tehlike.trim()];
-  if (!sinif) { alert("Geçersiz seçim"); return; }
-  fetch('/panel/isg/firma-detay', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({firma_id: aktifFirma, tehlike_sinifi: sinif})
-  }).then(r=>r.json()).then(d=>{
-    if (d.basarili) { alert("✅ Tehlike sınıfı kaydedildi: " + sinif); zeYukle(); }
-    else alert("Hata: " + (d.hata||""));
-  }).catch(()=>alert("Bağlantı hatası"));
+  // Artık kullanılmıyor — tehlike sınıfı firma kartından yönetilir
+  // Bu buton kaldırıldı, fonksiyon uyumluluk için bırakıldı
+}
+
+async function zeTehlikeKaydet(sinif) {
+  if (!sinif || !aktifFirma) return;
+  try {
+    const r = await fetch('/panel/isg/firma-detay', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({firma_id: aktifFirma, tehlike_sinifi: sinif, sgk_sicil_no: '', nace_kodu: ''})
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      document.getElementById('ze-tehlike-secim').style.display = 'none';
+      zeYukle();
+    } else alert('Hata: ' + (d.hata||''));
+  } catch(e) { alert('Bağlantı hatası'); }
 }
 
 function zeEgitimKatalogGoster(tehlike) {
@@ -4374,23 +4390,97 @@ function zeKatalogDetay(zon_id, btn) {
 
 async function zeKatalogEgitimGonder(zon_id, baslik, tur) {
   if (!aktifFirma) { alert('Önce firma seçin'); return; }
-  // Gönderilecek çalışanları seç
-  if (!_zeVeri || !_zeVeri.calisanlar) {
-    const onay = confirm(`"${baslik}" eğitimini tüm çalışanlara göndermek ister misiniz?`);
-    if (!onay) return;
-    await zeGonder([], zon_id, baslik);
-    return;
-  }
-  const hedefler = _zeVeri.calisanlar
-    .filter(c => c.telegram_id && c.egitimler.find(e => e.zon_id === zon_id && e.durum !== 'guncel'))
-    .map(c => c.telegram_id);
-  if (hedefler.length === 0) {
-    alert('Bu eğitim tüm çalışanlar için güncel!');
-    return;
-  }
-  const onay = confirm(`"${baslik}" eğitimi ${hedefler.length} kişiye gönderilecek.\n(Eksik/süresi dolmuş olanlar)\n\nDevam?`);
-  if (!onay) return;
-  await zeGonder(hedefler, zon_id, baslik);
+  // Çalışanları çek ve seçim modalını göster
+  try {
+    const r = await fetch(`/panel/api/calisanlar?firma_id=${encodeURIComponent(aktifFirma)}`);
+    const d = await r.json();
+    const calisanlar = (d.calisanlar || []).filter(c => c.telegram_id > 0);
+    if (!calisanlar.length) {
+      alert('Telegram ID'li çalışan bulunamadı. Önce çalışanları kaydedin.');
+      return;
+    }
+    zeGonderModalAc(zon_id, baslik, calisanlar);
+  } catch(e) { alert('Çalışanlar yüklenemedi: ' + e.message); }
+}
+
+function zeGonderModalAc(zon_id, baslik, calisanlar) {
+  // Mevcut modal varsa kaldır
+  const eskiModal = document.getElementById('ze-gonder-modal');
+  if (eskiModal) eskiModal.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ze-gonder-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <div style="font-weight:700;font-size:15px">📤 Eğitim Gönder</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">${baslik}</div>
+        </div>
+        <button onclick="document.getElementById('ze-gonder-modal').remove()"
+          style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">✕</button>
+      </div>
+
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Çalışan Seçin:</div>
+      <div style="margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg);border-radius:8px;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="ze-sec-tumunu" onchange="zeSecTumunuToggle(this)"
+            style="width:16px;height:16px">
+          <span style="font-weight:600;font-size:13px">Tümünü seç</span>
+        </label>
+        <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+          ${calisanlar.map(c => `
+          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border)">
+            <input type="checkbox" class="ze-gonder-chk" value="${c.telegram_id}"
+              style="width:15px;height:15px;flex-shrink:0">
+            <div>
+              <div style="font-size:13px;font-weight:500">${c.ad_soyad}</div>
+              <div style="font-size:11px;color:var(--muted)">${c.gorev||'—'}</div>
+            </div>
+          </label>`).join('')}
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12px;color:var(--muted)" id="ze-secim-sayisi">0 kişi seçili</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-dark" onclick="document.getElementById('ze-gonder-modal').remove()">İptal</button>
+          <button class="btn btn-primary" onclick="zeGonderModalKaydet('${zon_id}','${baslik}')">📤 Gönder</button>
+        </div>
+      </div>
+    </div>`;
+
+  // Checkbox değişikliğini takip et
+  modal.querySelectorAll('.ze-gonder-chk').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const n = modal.querySelectorAll('.ze-gonder-chk:checked').length;
+      const sayiEl = modal.querySelector('#ze-secim-sayisi');
+      if (sayiEl) sayiEl.textContent = n + ' kişi seçili';
+    });
+  });
+
+  document.body.appendChild(modal);
+  // Dışa tıklayınca kapat
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+function zeSecTumunuToggle(chkAll) {
+  const modal = document.getElementById('ze-gonder-modal');
+  if (!modal) return;
+  modal.querySelectorAll('.ze-gonder-chk').forEach(c => c.checked = chkAll.checked);
+  const n = modal.querySelectorAll('.ze-gonder-chk:checked').length;
+  const sayiEl = modal.querySelector('#ze-secim-sayisi');
+  if (sayiEl) sayiEl.textContent = n + ' kişi seçili';
+}
+
+async function zeGonderModalKaydet(zon_id, baslik) {
+  const modal = document.getElementById('ze-gonder-modal');
+  if (!modal) return;
+  const secili = [...modal.querySelectorAll('.ze-gonder-chk:checked')].map(c => c.value);
+  if (!secili.length) { alert('En az bir çalışan seçin'); return; }
+  modal.remove();
+  await zeGonder(secili, zon_id, baslik);
 }
 
 function calisanAltSekme(ad, el) {
