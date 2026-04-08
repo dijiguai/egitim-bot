@@ -370,7 +370,6 @@ async function ukKaydet() {
   <div class="tab" onclick="sekme('egitimler',this)">📚 Eğitimler</div>
   <div class="tab" onclick="sekme('davetler',this)">📱 Davetler</div>
   <div class="tab" onclick="sekme('toplu-egitim',this)">🚀 Toplu Gönder</div>
-  <div class="tab" onclick="sekme('isg',this)">🛡️ ISG</div>
 </div>
 
 <div class="main">
@@ -422,29 +421,58 @@ async function ukKaydet() {
 
   <!-- ÇALIŞANLAR -->
   <div class="tab-content" id="tab-calisanlar">
-    <!-- İstatistik Özeti — Çalışanlar sekmesinin üstünde -->
-    <div id="calisan-istatistik-ozet" style="margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600;color:var(--muted)">📈 Eğitim İstatistiği</div>
-        <button class="btn btn-dark btn-sm" onclick="calisanIstatistikYukle()" style="font-size:11px">Yenile</button>
+    <!-- Alt sekme navigasyonu -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px">
+      <div id="cs-tab-liste" onclick="calisanAltSekme('liste',this)"
+        style="padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--text)">
+        👥 Çalışanlar
       </div>
-      <div id="calisan-stats-mini" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+      <div id="cs-tab-zorunlu" onclick="calisanAltSekme('zorunlu',this)"
+        style="padding:10px 18px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted)">
+        ⚠️ Zorunlu Eğitimler
+      </div>
     </div>
-    <hr style="border:none;border-top:1px solid var(--border);margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div class="section-title" style="margin:0">Çalışan Listesi</div>
-        <div style="display:flex;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
-          <button id="btn-aktif" class="btn btn-dark btn-sm" style="border-radius:0;border:none" onclick="calisanModGec('aktif')">👥 Aktif</button>
-          <button id="btn-arsiv" class="btn btn-sm" style="border-radius:0;border:none;background:transparent;color:var(--muted)" onclick="calisanModGec('arsiv')">📦 Arşiv</button>
+
+    <!-- ÇALIŞAN LİSTESİ PANELİ -->
+    <div id="cs-panel-liste">
+      <div id="calisan-istatistik-ozet" style="margin-bottom:16px">
+        <div id="calisan-stats-mini" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="display:flex;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+            <button id="btn-aktif" class="btn btn-dark btn-sm" style="border-radius:0;border:none" onclick="calisanModGec('aktif')">👥 Aktif</button>
+            <button id="btn-arsiv" class="btn btn-sm" style="border-radius:0;border:none;background:transparent;color:var(--muted)" onclick="calisanModGec('arsiv')">📦 Arşiv</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px" id="aktif-butonlar">
+          <button class="btn btn-dark btn-sm" onclick="kayitButonuGonder(this)">📌 Kayıt Butonu Gönder</button>
+          <button class="btn btn-primary" onclick="calisanModalAc()">+ Çalışan Ekle</button>
         </div>
       </div>
-      <div style="display:flex;gap:8px" id="aktif-butonlar">
-        <button class="btn btn-dark btn-sm" onclick="kayitButonuGonder(this)">📌 Kayıt Butonu Gönder</button>
-        <button class="btn btn-primary" onclick="calisanModalAc()">+ Çalışan Ekle</button>
-      </div>
+      <div id="calisan-liste"><div class="loading"><div class="spinner"></div></div></div>
     </div>
-    <div id="calisan-liste"><div class="loading"><div class="spinner"></div></div></div>
+
+    <!-- ZORUNLU EĞİTİMLER PANELİ -->
+    <div id="cs-panel-zorunlu" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:15px;font-weight:700">Zorunlu İSG Eğitimleri</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px" id="ze-firma-bilgi">6331 sayılı İSG Kanunu kapsamında zorunlu eğitimler</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-dark btn-sm" id="ze-f-tum" onclick="zeFiltre('tum',this)" style="background:var(--accent);color:#fff;border:none">Tümü</button>
+          <button class="btn btn-dark btn-sm" id="ze-f-eksik" onclick="zeFiltre('eksik',this)">Eksik Var</button>
+          <button class="btn btn-dark btn-sm" id="ze-f-hic" onclick="zeFiltre('hic',this)">Hiç Almamış</button>
+          <button class="btn btn-dark btn-sm" id="ze-f-tamam" onclick="zeFiltre('tamam',this)">Uyumlu</button>
+          <button class="btn btn-primary btn-sm" id="ze-toplu-btn" onclick="zeTopluGonder()" style="display:none">📤 Seçililere Gönder</button>
+          <button class="btn btn-dark btn-sm" onclick="zeYukle()">🔄 Yenile</button>
+        </div>
+      </div>
+      <div id="ze-yukleniyor" style="text-align:center;padding:40px;display:none"><div class="spinner" style="margin:0 auto 12px"></div>Yükleniyor...</div>
+      <div id="ze-ozet" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px"></div>
+      <div id="ze-liste"></div>
+    </div>
   </div>
 
   <!-- İSTATİSTİK -->
@@ -1104,11 +1132,22 @@ async function firmaKartlariniYukle() {
         ? `<button class="btn btn-dark btn-sm" style="font-size:11px" onclick="event.stopPropagation();firmaAtaModalAc('${f.firma_id}','${f.ad}')">+ Kendimi Ata</button>`
         : (uzmanModu ? `<span style="background:#e8f7f0;color:var(--green);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">✓ Atandım</span>` : '');
 
-      const isgOzetHTML = th ? `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:${tehlikeRenk[th]||'var(--bg)'};border-radius:8px;margin-bottom:10px">
-          <span style="font-size:12px;color:${tehlikeYazi[th]||'var(--muted)'};">${tehlikeEmoji[th]} ${th}</span>
-          ${ozet.yillik_egitim_saat ? `<span style="font-size:11px;color:var(--muted)">${f.calisan_sayisi} çalışan · ${ozet.yillik_egitim_saat}s/yıl</span>` : ''}
-        </div>` : '';
+      const uzmanBilgi = f.uzman_bilgi || {};
+      const isgOzetHTML = `
+        <div style="background:${tehlikeRenk[th]||'var(--bg)'};border-radius:8px;padding:8px 10px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${uzmanBilgi.ad?'6px':'0'}">
+            <span style="font-size:12px;font-weight:600;color:${tehlikeYazi[th]||'var(--muted)'}">
+              ${tehlikeEmoji[th]||'⚪'} ${th||'Tehlike sınıfı tanımlanmamış'}
+            </span>
+            ${ozet.yillik_egitim_saat ? `<span style="font-size:11px;color:var(--muted)">${f.calisan_sayisi||0} çalışan · ${ozet.yillik_egitim_saat}s/yıl</span>` : ''}
+          </div>
+          ${uzmanBilgi.ad ? `
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)">
+            <span>🛡️ ${uzmanBilgi.ad}</span>
+            ${uzmanBilgi.sinif ? `<span style="background:var(--card);padding:1px 6px;border-radius:4px;font-weight:600">${uzmanBilgi.sinif} Sınıfı</span>` : ''}
+            ${uzmanBilgi.aylik_dk ? `<span>· Aylık: ${uzmanBilgi.aylik_dk} dk</span>` : ''}
+          </div>` : `<div style="font-size:11px;color:var(--muted)">🛡️ Uzman atanmamış</div>`}
+        </div>`;
 
       return `
       <div class="egitim-kart" style="cursor:pointer;transition:transform 0.15s;${!f.atanmis&&uzmanModu?'opacity:0.75':''}"
@@ -1140,9 +1179,10 @@ async function firmaKartlariniYukle() {
             <div style="font-size:10px;color:var(--muted)">Toplam Kayıt</div>
           </div>
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-dark btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();firmaDuzenle('${f.firma_id}','${f.ad}','${f.grup_id||''}')">✏️</button>
           <button class="btn btn-red btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();firmaSil('${f.firma_id}','${f.ad}')">🗑</button>
+          <button class="btn btn-dark btn-sm" style="flex:0 0 auto" onclick="event.stopPropagation();uzmanAtaModalAc('${f.firma_id}','${f.ad}')">🛡️ Uzman Ata</button>
           <button class="btn btn-primary" style="flex:1" onclick="event.stopPropagation();firmaAc('${f.firma_id}','${f.ad}')">Yönet →</button>
         </div>
       </div>`;
@@ -1690,41 +1730,57 @@ function renderCalisanlar(calisanlar) {
     document.getElementById('calisan-liste').innerHTML='<div class="empty"><div class="empty-icon">👥</div>Henüz çalışan eklenmemiş<br><br><button class="btn btn-primary" onclick="calisanModalAc()">+ İlk Çalışanı Ekle</button></div>';
     return;
   }
-  document.getElementById('calisan-liste').innerHTML = calisanlar.map(c=>`
+  document.getElementById('calisan-liste').innerHTML = calisanlar.map(c=>{
+    const isgPct = c.isg_toplam > 0 ? Math.round(c.isg_tamamlanan / c.isg_toplam * 100) : 0;
+    const isgRenk = isgPct === 100 ? 'var(--green)' : isgPct >= 60 ? '#856404' : 'var(--red)';
+    const isgBg = isgPct === 100 ? '#e8f7f0' : isgPct >= 60 ? '#fff8e6' : '#fdecea';
+    const adSafe = (c.ad_soyad||'').replace(/'/g,"&#39;");
+    const gorevSafe = (c.gorev||'').replace(/'/g,"&#39;");
+    const egitimPct = c.toplam_egitim ? Math.round(c.tamamlanan/c.toplam_egitim*100) : 0;
+    return `
     <div class="calisan-kart">
       <div class="calisan-kart-header">
-        <div>
-          <div class="calisan-ad">
-            ${c.ad_soyad}
-            ${c.bugun_izinli ? '<span class="pill pill-izin">🏖 Bugün İzinli</span>' : ''}
+        <div style="flex:1;min-width:0">
+          <div class="calisan-ad" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span>${c.ad_soyad}</span>
+            ${c.bugun_izinli ? '<span class="pill pill-izin">🏖 İzinli</span>' : ''}
             ${c.bugun_tamamladi ? '<span class="pill pill-gecti">✅ Bugün Tamamladı</span>' : ''}
           </div>
           <div class="calisan-gorev">${c.gorev}</div>
-          ${c.telegram_id > 0 ? `<div class="calisan-id">ID: ${c.telegram_id}</div>` : '<div class="calisan-id" style="color:#e67e22">⚠ Telegram bağlı değil</div>'}
+          ${c.telegram_id > 0 ? `<div class="calisan-id">TG: ${c.telegram_id}</div>` : '<div class="calisan-id" style="color:#e67e22">⚠ Telegram bağlı değil</div>'}
         </div>
-        <div class="calisan-aksiyonlar">
-          <button class="btn btn-primary btn-sm" onclick="egitimSecModalAc(${c.telegram_id},'${c.ad_soyad}',this)" ${c.telegram_id<=0?'disabled':''} title="Eğitim seç ve gönder">📤 Eğitim Gönder</button>
-          <button class="btn btn-orange btn-sm" onclick="ekstraHakVer(${c.telegram_id},'${c.ad_soyad}',this)" ${c.telegram_id<=0?'disabled':''} title="Bugün tekrar girebilsin">🔁 Tekrar İzni</button>
-          <button class="btn btn-green btn-sm" onclick="izinModalAc(${c.telegram_id},'${c.ad_soyad}')">🏖 İzin</button>
-          <button class="btn btn-dark btn-sm" onclick="calisanDuzenle(${c.telegram_id},'${c.ad_soyad}','${c.gorev}','${c.dogum_tarihi}')">✏️</button>
-          <button class="btn btn-dark btn-sm" onclick="arsivleModalAc(${c.telegram_id},'${c.ad_soyad}')">📦</button>
-          <button class="btn btn-red btn-sm" onclick="silModalAc(${c.telegram_id},'${c.ad_soyad}')">🗑</button>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          ${c.isg_toplam > 0 ? `
+          <div style="background:${isgBg};border-radius:8px;padding:4px 10px;text-align:center;min-width:72px">
+            <div style="font-size:16px;font-weight:800;color:${isgRenk}">${c.isg_tamamlanan||0}/${c.isg_toplam||0}</div>
+            <div style="font-size:9px;color:${isgRenk}">Zorunlu Eğt.</div>
+          </div>` : ''}
         </div>
       </div>
-      <div class="calisan-ilerleme">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:6px">
-          <span>Eğitim İlerlemesi</span>
-          <div style="display:flex;gap:12px;align-items:center">
-            <span title="Geçilen eğitim sayısı">✅ ${c.tamamlanan}/${c.toplam_egitim} geçti</span>
-            <span title="Toplam katıldığı eğitim sayısı (geçti+kaldı)">📋 ${c.toplam_alinmis} katılım</span>
-            ${c.son_egitim ? `<span title="Son eğitim tarihi">🗓 ${c.son_egitim}</span>` : ''}
-            <button class="btn btn-dark" style="font-size:11px;padding:2px 8px;border-radius:6px" onclick="egitimDetayGoster(${c.telegram_id},'${c.ad_soyad}',this)">Detay</button>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="egitimSecModalAc(${c.telegram_id},'${adSafe}',this)" ${c.telegram_id<=0?'disabled':''}>📤 Eğitim Gönder</button>
+        <button class="btn btn-orange btn-sm" onclick="ekstraHakVer(${c.telegram_id},'${adSafe}',this)" ${c.telegram_id<=0?'disabled':''}>🔁 Tekrar İzni</button>
+        <button class="btn btn-green btn-sm" onclick="izinModalAc(${c.telegram_id},'${adSafe}')">🏖 İzin</button>
+        <button class="btn btn-dark btn-sm" onclick="calisanAltSekme('zorunlu', document.getElementById('cs-tab-zorunlu'));setTimeout(()=>zeFiltreCalisanGoster('${c.telegram_id}'),300)" ${c.telegram_id<=0?'disabled':''} title="Bu çalışanın zorunlu eğitimlerini göster">⚠️ Eğitimler</button>
+        <button class="btn btn-dark btn-sm" onclick="calisanDuzenle(${c.telegram_id},'${adSafe}','${gorevSafe}','${c.dogum_tarihi}')">✏️</button>
+        <button class="btn btn-dark btn-sm" onclick="arsivleModalAc(${c.telegram_id},'${adSafe}')">📦</button>
+        <button class="btn btn-red btn-sm" onclick="silModalAc(${c.telegram_id},'${adSafe}')">🗑</button>
+      </div>
+      <div class="calisan-ilerleme" style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+          <span>Eğitim İlerlemesi (günlük)</span>
+          <div style="display:flex;gap:10px">
+            <span>✅ ${c.tamamlanan}/${c.toplam_egitim} geçti</span>
+            <span>📋 ${c.toplam_alinmis} katılım</span>
+            ${c.son_egitim ? `<span>🗓 ${c.son_egitim}</span>` : ''}
+            <button class="btn btn-dark" style="font-size:10px;padding:1px 7px;border-radius:6px" onclick="egitimDetayGoster(${c.telegram_id},'${adSafe}',this)">Detay</button>
           </div>
         </div>
-        <div class="ilerleme-bar"><div class="ilerleme-dolu" style="width:${c.toplam_egitim?Math.round(c.tamamlanan/c.toplam_egitim*100):0}%"></div></div>
-        <div id="detay-${c.telegram_id}" style="display:none;margin-top:10px"></div>
+        <div class="ilerleme-bar"><div class="ilerleme-dolu" style="width:${egitimPct}%"></div></div>
+        <div id="detay-${c.telegram_id}" style="display:none;margin-top:8px"></div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function calisanModalAc() {
@@ -3421,30 +3477,31 @@ async function dbYukle() {
   if (!aktifFirma) return;
   const yukEl = document.getElementById('db-yukleniyor');
   const iceEl = document.getElementById('db-icerik');
-  const hatEl = document.getElementById('db-hata');
   if (!yukEl) return;
   yukEl.style.display = 'block';
-  iceEl.style.display = 'none';
-  hatEl.style.display = 'none';
+  if (iceEl) iceEl.style.display = 'none';
 
   try {
     const r = await fetch(`/panel/isg/dashboard?firma_id=${encodeURIComponent(aktifFirma)}`);
     const d = await r.json();
     yukEl.style.display = 'none';
-    if (d.hata) { hatEl.textContent = d.hata; hatEl.style.display = 'block'; return; }
+    if (d.hata) {
+      yukEl.innerHTML = `<div style="color:var(--red);padding:20px">${d.hata}</div>`;
+      yukEl.style.display = 'block';
+      return;
+    }
     dbRender(d);
-    iceEl.style.display = 'block';
+    if (iceEl) iceEl.style.display = 'block';
   } catch(e) {
-    yukEl.style.display = 'none';
-    hatEl.textContent = 'Bağlantı hatası: ' + e.message;
-    hatEl.style.display = 'block';
+    yukEl.style.display = 'block';
+    yukEl.innerHTML = `<div style="color:var(--red);padding:20px">Bağlantı hatası: ${e.message}</div>`;
   }
 }
 
 function dbRender(d) {
   // Skor çemberi
   const arc = document.getElementById('db-skor-arc');
-  const sayi = document.getElementById('db-skor-sayi');
+  const sayi = document.getElementById('db-skor-yazi') || document.getElementById('db-skor-sayi');
   const seviyeEl = document.getElementById('db-seviye');
   if (arc && sayi) {
     const cevre = 314;
@@ -3580,11 +3637,11 @@ function shHesapla() {
   const toplamSaat = kisiBasiSaat * calisan;
   const aylikSaat = (toplamSaat / 12).toFixed(1);
 
-  document.getElementById('sh-toplam-saat').textContent = toplamSaat;
-  document.getElementById('sh-aylik-saat').textContent = aylikSaat;
-  document.getElementById('sh-kisi-saat').textContent = kisiBasiSaat;
-  document.getElementById('sh-egitim-aciklama').textContent =
-    `${calisan} çalışan × ${kisiBasiSaat} saat = ${toplamSaat} saat/yıl`;
+  const _set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  _set('sh-toplam-saat', toplamSaat);
+  _set('sh-aylik-saat', aylikSaat);
+  _set('sh-kisi-saat', kisiBasiSaat);
+  _set('sh-egitim-aciklama', `${calisan} çalışan × ${kisiBasiSaat} saat = ${toplamSaat} saat/yıl`);
 
   // Uzman süresi hesapla
   const tamZamanliEl = document.getElementById('sh-tam-zamanli-badge');
@@ -3866,9 +3923,13 @@ let _zeFiltre = 'hepsi';
 
 async function zeYukle() {
   if (!aktifFirma) return;
-  document.getElementById('ze-yukleniyor').style.display = 'block';
-  document.getElementById('ze-liste').innerHTML = '';
-  document.getElementById('ze-ozet').innerHTML = '';
+  const yukEl = document.getElementById('ze-yukleniyor');
+  const listeEl = document.getElementById('ze-liste');
+  const ozetEl = document.getElementById('ze-ozet');
+  if (!yukEl) return;
+  yukEl.style.display = 'block';
+  if (listeEl) listeEl.innerHTML = '';
+  if (ozetEl) ozetEl.innerHTML = '';
   try {
     const r = await fetch(`/panel/isg/zorunlu-egitimler?firma_id=${encodeURIComponent(aktifFirma)}`);
     const d = await r.json();
@@ -4044,6 +4105,84 @@ async function zeTopluGonder() {
   if (!secili.length) { alert('Önce çalışan seçin'); return; }
   await zeGonder(secili, null, 'Zorunlu İSG Eğitimleri');
 }
+// ── Firma kartından uzman atama ──────────────────────────────
+async function uzmanAtaModalAc(firma_id, firma_ad) {
+  // Uzman listesini çek ve basit bir seçim modalı aç
+  try {
+    const r = await fetch('/panel/isg/uzmanlar');
+    const uzmanlar = await r.json();
+    if (!uzmanlar.length) {
+      alert('Önce ISG Uzmanı kaydı oluşturun.\nGiriş yapınca profil seçiminde uzman kaydı yapabilirsiniz.');
+      return;
+    }
+    const secilenId = session ? null : null; // placeholder
+    const secenek = uzmanlar.map(u =>
+      `${u.uzman_id}|${u.ad_soyad} (${u.sinif||'?'} Sınıfı, ${u.unvan||''})`
+    );
+    // Basit prompt ile seç
+    let msg = `"${firma_ad}" firması için uzman seçin:\n\n`;
+    uzmanlar.forEach((u,i) => {
+      msg += `${i+1}. ${u.ad_soyad} — ${u.sinif||'?'} Sınıfı\n`;
+    });
+    msg += `\nNumara girin (1-${uzmanlar.length}):`;
+    const secim = prompt(msg);
+    if (!secim) return;
+    const idx = parseInt(secim) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= uzmanlar.length) { alert('Geçersiz seçim'); return; }
+    const secilen = uzmanlar[idx];
+    const r2 = await fetch('/panel/isg/atamalar', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        firma_id, uzman_id: secilen.uzman_id,
+        unvan_tipi: 'is_guvenligi_uzmani',
+        baslangic_tarihi: new Date().toLocaleDateString('tr-TR')
+      })
+    });
+    const d = await r2.json();
+    if (d.basarili) {
+      alert(`✅ ${secilen.ad_soyad} başarıyla atandı!`);
+      firmaKartlariniYukle();
+    } else { alert('Atama hatası: ' + (d.hata||'')); }
+  } catch(e) { alert('Bağlantı hatası: ' + e.message); }
+}
+
+function calisanAltSekme(ad, el) {
+  // Sub-tab switching for Çalışanlar tab
+  const panelListe   = document.getElementById('cs-panel-liste');
+  const panelZorunlu = document.getElementById('cs-panel-zorunlu');
+  const tabListe     = document.getElementById('cs-tab-liste');
+  const tabZorunlu   = document.getElementById('cs-tab-zorunlu');
+function zeFiltreCalisanGoster(telegramId) {
+  // Switch to zorunlu tab and filter for specific calisan
+  const tab = document.getElementById('cs-tab-zorunlu');
+  if (tab) calisanAltSekme('zorunlu', tab);
+  // After data loads, filter
+  setTimeout(() => {
+    if (_zeVeri && _zeVeri.calisanlar) {
+      const filtered = _zeVeri.calisanlar.filter(c => String(c.telegram_id) === String(telegramId));
+      if (filtered.length) zeRenderListe(filtered);
+    }
+  }, 800);
+}
+
+
+
+  if (ad === 'liste') {
+    if (panelListe)   panelListe.style.display = 'block';
+    if (panelZorunlu) panelZorunlu.style.display = 'none';
+    if (tabListe)   { tabListe.style.borderBottomColor = 'var(--accent)'; tabListe.style.color = 'var(--text)'; tabListe.style.fontWeight = '600'; }
+    if (tabZorunlu) { tabZorunlu.style.borderBottomColor = 'transparent'; tabZorunlu.style.color = 'var(--muted)'; tabZorunlu.style.fontWeight = '500'; }
+  } else {
+    if (panelListe)   panelListe.style.display = 'none';
+    if (panelZorunlu) panelZorunlu.style.display = 'block';
+    if (tabZorunlu) { tabZorunlu.style.borderBottomColor = 'var(--accent)'; tabZorunlu.style.color = 'var(--text)'; tabZorunlu.style.fontWeight = '600'; }
+    if (tabListe)   { tabListe.style.borderBottomColor = 'transparent'; tabListe.style.color = 'var(--muted)'; tabListe.style.fontWeight = '500'; }
+    // Load zorunlu egitimler data
+    zeYukle();
+  }
+}
+
+
 
 // ── Eğitim Alt Sekme ──────────────────────────────────────────
 function egitimAltSekme(ad, el) {
@@ -4576,6 +4715,22 @@ def api_calisanlar():
         calisan_kayitlar = [k for k in tum_kayitlar if str(k.get("telegram_id","")) == str(tid)]
         son_egitim = calisan_kayitlar[-1].get("tarih","") if calisan_kayitlar else ""
 
+        # ISG zorunlu eğitim sayısı (hızlı hesap — tam analiz zeYukle'de)
+        isg_tamamlanan = 0
+        isg_toplam = 0
+        try:
+            from isg.zorunlu_egitim import tehlike_icin_zorunlu_egitimler, calisan_eksik_egitimler
+            from isg.firma_detay import firma_detay_getir
+            fd = firma_detay_getir(firma_id)
+            tehlike = fd.get("tehlike_sinifi", "")
+            if tehlike:
+                zorunlu = tehlike_icin_zorunlu_egitimler(tehlike)
+                isg_toplam = len(zorunlu)
+                eksikler = calisan_eksik_egitimler(tid, firma_id, tehlike)
+                isg_tamamlanan = len([e for e in eksikler if e.get("durum") == "guncel"])
+        except Exception:
+            pass
+
         sonuc.append({
             "telegram_id": tid,
             "ad_soyad": c["ad_soyad"],
@@ -4586,7 +4741,10 @@ def api_calisanlar():
             "tamamlanan": tamamlanan,
             "toplam_egitim": toplam_egitim,
             "toplam_alinmis": toplam_alinmis,
-            "son_egitim": son_egitim
+            "son_egitim": son_egitim,
+            "isg_tamamlanan": isg_tamamlanan,
+            "isg_toplam": isg_toplam,
+            "aktif": True,
         })
 
     return jsonify({"calisanlar": sonuc, "bot_username": BOT_USERNAME})
@@ -5264,14 +5422,13 @@ def api_kayit_butonu_gonder():
 
 @app.route("/panel/api/firmalar-detay")
 def api_firmalar_detay():
-    """Firma kartlari icin istatistikli liste."""
+    """Firma kartlari icin istatistikli liste — uzman + tehlike + sure bilgisi dahil."""
     if not session.get("panel_giris"): return jsonify([]), 401
     try:
         from firma_manager import tum_firmalar
         from durum import bugun_tamamlayanlar
         firmalar = tum_firmalar(force=True)
         bugun = date.today().strftime("%d.%m.%Y")
-        bugun_tamamlayan_listesi = bugun_tamamlayanlar(bugun)
         sonuc = []
         for fid, f in firmalar.items():
             try:
@@ -5279,17 +5436,71 @@ def api_firmalar_detay():
                 kayitlar = tum_kayitlar_getir(fid)
                 bugun_gecti = sum(1 for k in kayitlar
                     if k.get("tarih") == bugun and k.get("durum") in ("GECTI","GECTİ"))
+                aktif_sayi = len([c for c in calisanlar.values()
+                                  if str(c.get("aktif","1")) not in ("0","false","False")])
             except:
                 calisanlar = {}
                 kayitlar = []
                 bugun_gecti = 0
+                aktif_sayi = 0
+
+            # ISG detay — tehlike + uzman
+            tehlike = ""
+            uzman_bilgi = {}
+            sure_ozet = {}
+            try:
+                from isg.firma_detay import firma_detay_getir
+                fd = firma_detay_getir(fid)
+                tehlike = fd.get("tehlike_sinifi", "")
+            except:
+                pass
+            try:
+                from isg.atama_gecmisi import tum_satirlar as atama_satirlar, SEKME as ATAMA_SEKME, BASLIKLAR as ATAMA_BASLIKLAR
+                from isg.sheets_base import tum_satirlar
+                from isg.uzmanlar import uzman_getir
+                atamalar = tum_satirlar(ATAMA_SEKME, ATAMA_BASLIKLAR)
+                aktif_atama = next((a for a in atamalar
+                                    if a.get("firma_id") == fid
+                                    and a.get("aktif","1") != "0"
+                                    and not a.get("bitis_tarihi","")), None)
+                if aktif_atama:
+                    u = uzman_getir(aktif_atama.get("uzman_id","")) or {}
+                    sinif = u.get("sinif","")
+                    calisan_n = aktif_sayi or int(fd.get("calisan_sayisi","0") or 0) if "fd" in dir() else aktif_sayi
+                    # Aylık süre hesabı (basit client-tarafı ile aynı formül)
+                    aylik_dk = 0
+                    if tehlike and calisan_n:
+                        if tehlike == "Az Tehlikeli":
+                            aylik_dk = calisan_n * 10 if calisan_n <= 1000 else 0
+                        elif tehlike == "Tehlikeli":
+                            aylik_dk = max(240, calisan_n * 15) if calisan_n <= 500 else 0
+                        elif tehlike == "Çok Tehlikeli":
+                            aylik_dk = max(240, calisan_n * 20) if calisan_n <= 250 else 0
+                    uzman_bilgi = {
+                        "ad": u.get("ad_soyad",""),
+                        "sinif": sinif,
+                        "aylik_dk": aylik_dk if aylik_dk else ("Tam Zamanlı" if tehlike else ""),
+                    }
+            except:
+                pass
+            try:
+                if tehlike and aktif_sayi:
+                    egitim_sure = {"Az Tehlikeli":8,"Tehlikeli":12,"Çok Tehlikeli":16}
+                    yillik = egitim_sure.get(tehlike,0) * aktif_sayi
+                    sure_ozet = {"yillik_egitim_saat": yillik}
+            except:
+                pass
+
             sonuc.append({
                 "firma_id": fid,
                 "ad": f["ad"],
                 "grup_id": f.get("grup_id", 0),
-                "calisan_sayisi": len(calisanlar),
+                "calisan_sayisi": aktif_sayi,
                 "bugun_tamamlayan": bugun_gecti,
-                "toplam_kayit": len(kayitlar)
+                "toplam_kayit": len(kayitlar),
+                "tehlike_sinifi": tehlike,
+                "uzman_bilgi": uzman_bilgi,
+                "sure_ozet": sure_ozet,
             })
         return jsonify(sonuc)
     except Exception as e:
