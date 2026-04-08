@@ -251,8 +251,9 @@ def zamanlayici_baslat(app):
                     loop.run_until_complete(egitim_kapat(app))
                 elif hedef_is == "hatirlat":
                     try:
-                        # Gün içi tamamlamayan hatırlatma (opsiyonel)
-                        logger.info("14:00 hatırlatma tetiklendi")
+                        from bildirim_sistemi import tamamlamayan_hatirlat
+                        n = loop.run_until_complete(tamamlamayan_hatirlat(app))
+                        logger.info(f"14:00 hatırlatma: {n} kişiye gönderildi")
                     except Exception as e:
                         logger.error(f"Hatirlatma hatasi: {e}")
                 elif hedef_is == "haftalik_ozet":
