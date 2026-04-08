@@ -70,10 +70,14 @@ def firma_personel_listesi(firma_id: str) -> list:
     """
     Firmaya ait aktif çalışanları döner.
     [{telegram_id, ad_soyad, gorev, aktif}, ...]
+    Firma'ya özgü sekme yoksa varsayılan 'Calisanlar' sekmesine düşer.
     """
     try:
         from calisanlar import tum_calisanlar
         calisanlar = tum_calisanlar(firma_id=firma_id)
+        # Boş gelirse varsayılan firma ile dene
+        if not calisanlar:
+            calisanlar = tum_calisanlar(firma_id="varsayilan")
         return [
             {
                 "telegram_id": str(c.get("telegram_id", "")),
