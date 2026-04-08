@@ -1283,7 +1283,8 @@ function firmaAc(firma_id, firma_adi) {
   const kayitlarTab = document.getElementById('tab-kayitlar');
   if(ilkTab) ilkTab.classList.add('active');
   if(kayitlarTab) kayitlarTab.classList.add('active');
-  document.getElementById('filtre-bar').style.display = 'flex';
+  const filtrBarEl = document.getElementById('filtre-bar');
+  if(filtrBarEl) filtrBarEl.style.display = 'flex';
 
   // 5. Veriyi yukle
   verileriYukle();
@@ -1416,7 +1417,7 @@ async function verileriYukle() {
   const bitis = document.getElementById('tarih-bitis').value.split('-').reverse().join('.');
   const durum = document.getElementById('durum-f').value;
   document.getElementById('kayit-tb').innerHTML='<tr><td colspan="8"><div class="loading"><div class="spinner"></div>Yükleniyor...</div></td></tr>';
-  document.getElementById('egitim-stats').innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const _statsEl = document.getElementById('egitim-stats'); if(_statsEl) _statsEl.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   try {
     const r = await fetch(`/panel/api/kayitlar?bas=${bas}&bitis=${bitis}&durum=${encodeURIComponent(durum)}&firma_id=${aktifFirma}`);
     const d = await r.json();
@@ -1453,6 +1454,7 @@ function renderKayitlar(kayitlarHam) {
 
 function renderIstatistik(ozet) {
   const el = document.getElementById('egitim-stats');
+  if(!ozet || typeof ozet !== 'object') ozet = {};
   if (el) {
     if(!Object.keys(ozet).length){el.innerHTML='<div class="empty"><div class="empty-icon">📊</div>Veri yok</div>';return;}
     el.innerHTML=Object.entries(ozet).map(([konu,e])=>{
@@ -2821,9 +2823,10 @@ async function isgModulYukle() {
   }
 
   if (_isgYuklendi) {
-    // Zaten yüklendi — uzman listesini aç
-    const ilk = tab.querySelector('.isg-alt-tab');
+    // Zaten yüklendi — dashboard göster
+    const ilk = tab.querySelector('.isg-sidebar-item') || tab.querySelector('.isg-alt-tab');
     if (ilk) ilk.click();
+    else dbYukle();
     return;
   }
 
@@ -2848,8 +2851,9 @@ async function isgModulYukle() {
     _isgYuklendi = true;
 
     setTimeout(() => {
-      const ilk = tab.querySelector('.isg-alt-tab');
-      if (ilk) { ilk.click(); }
+      const ilk = tab.querySelector('.isg-sidebar-item') || tab.querySelector('.isg-alt-tab');
+      if (ilk) ilk.click();
+      else dbYukle();
     }, 50);
   } catch(e) {
     tab.innerHTML = `<div style="padding:60px;text-align:center;color:var(--muted)">
@@ -2860,24 +2864,249 @@ async function isgModulYukle() {
   }
 }
 
+
+// Yeni sidebar firma detay fonksiyonları
+async function isgDetayFirmaYukle() {
+  const firmaId = document.getElementById('isg-detay-firma-sec') &&
+                  document.getElementById('isg-detay-firma-sec').value;
+  const form = document.getElementById('isg-detay-form');
+  if (!firmaId) { if(form) form.style.display = 'none'; return; }
+  if(form) form.style.display = 'block';
+  try {
+    const r = await fetch('/panel/isg/firma-detay?firma_id=' + encodeURIComponent(firmaId));
+    const d = await r.json();
+    const sgkEl = document.getElementById('isg-sgk-no');
+    const naceEl = document.getElementById('isg-nace-kodu');
+    const tehlikeEl = document.getElementById('isg-tehlike-sinifi');
+    const calisanEl = document.getElementById('isg-calisan-sayisi');
+    const bilgiEl = document.getElementById('isg-calisan-bilgi');
+    if(sgkEl) sgkEl.value = d.sgk_sicil_no || d.sgk_no || '';
+    if(naceEl) naceEl.value = d.nace_kodu || '';
+    if(tehlikeEl) tehlikeEl.value = d.tehlike_sinifi || '';
+    if(calisanEl) calisanEl.value = d.aktif_calisan_sayisi || d.calisan_sayisi || '';
+    if(bilgiEl && d.aktif_calisan_sayisi !== undefined) {
+      bilgiEl.textContent = '(Sheets'ten: ' + d.aktif_calisan_sayisi + ' aktif çalışan)';
+    }
+  } catch(e) { console.error('Firma detay yüklenemedi:', e); }
+}
+
+async function isgDetayYukle(firma_id) {
+  // isgAltSekme'den firma_id ile çağrılır
+  const sel = document.getElementById('isg-detay-firma-sec');
+  if (sel && firma_id) sel.value = firma_id;
+  await isgDetayFirmaYukle();
+}
+
+async function isgCalisanSayisiGuncelle() {
+  const firmaId = document.getElementById('isg-detay-firma-sec') &&
+                  document.getElementById('isg-detay-firma-sec').value;
+  if (!firmaId) return;
+  const bilgiEl = document.getElementById('isg-calisan-bilgi');
+  if(bilgiEl) bilgiEl.textContent = 'Sayılıyor...';
+  try {
+    const r = await fetch('/panel/api/calisanlar?firma_id=' + encodeURIComponent(firmaId));
+    const d = await r.json();
+    const aktifSayi = (d.calisanlar || []).filter(c => c.aktif !== false && c.aktif !== '0').length;
+    const el = document.getElementById('isg-calisan-sayisi');
+    if(el) el.value = aktifSayi;
+    if(bilgiEl) bilgiEl.textContent = aktifSayi + ' aktif çalışan (Sheets'ten güncellendi)';
+  } catch(e) {
+    if(bilgiEl) bilgiEl.textContent = 'Yüklenemedi';
+  }
+}
+
+async function isgDetayKaydet() {
+  const firmaId = document.getElementById('isg-detay-firma-sec') &&
+                  document.getElementById('isg-detay-firma-sec').value;
+  if (!firmaId) { alert('Firma seçin'); return; }
+  const mesajEl = document.getElementById('isg-detay-mesaj');
+  const veri = {
+    firma_id: firmaId,
+    sgk_sicil_no: (document.getElementById('isg-sgk-no') || {}).value || '',
+    nace_kodu:    (document.getElementById('isg-nace-kodu') || {}).value || '',
+    tehlike_sinifi: (document.getElementById('isg-tehlike-sinifi') || {}).value || '',
+    calisan_sayisi: (document.getElementById('isg-calisan-sayisi') || {}).value || '',
+  };
+  try {
+    const r = await fetch('/panel/isg/firma-detay', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(veri)
+    });
+    const d = await r.json();
+    if (d.basarili) {
+      if(mesajEl) { mesajEl.style.display = 'inline'; setTimeout(() => mesajEl.style.display = 'none', 2000); }
+    } else { alert('Hata: ' + (d.hata || '')); }
+  } catch(e) { alert('Bağlantı hatası'); }
+}
+
+// Sınav değişkenleri yukarıda tanımlı
+
+// ── SINAV SİSTEMİ ─────────────────────────────────────────────
+let _sinavSorular = [], _sinavIdx = 0, _sinavDogru = 0;
+let _sinavAlici = null, _sinavEgitim = null, _sinavVeri = null;
+let _sinavCevaplar = [];
+
+async function zeGonderVeSinav(telegramIdler, zon_id, baslik, ad_soyad, gorev) {
+  if (telegramIdler.length === 1 && telegramIdler[0]) {
+    _sinavAlici = {telegram_id: telegramIdler[0], ad_soyad: ad_soyad || '', gorev: gorev || ''};
+    _sinavEgitim = {zon_id, baslik};
+    _sinavVeri = {telegramIdler, zon_id, baslik, ad_soyad, gorev};
+    await sinavAc(zon_id, baslik);
+  } else {
+    await zeGonder(telegramIdler, '', baslik);
+  }
+}
+
+async function sinavAc(zon_id, baslik) {
+  const modal = document.getElementById('sinav-modal');
+  if (!modal) { alert('Sınav modalı bulunamadı — sayfayı yenileyin'); return; }
+  document.getElementById('sinav-egitim-baslik').textContent = baslik;
+  document.getElementById('sinav-soru-metin').textContent = 'Sorular yükleniyor...';
+  document.getElementById('sinav-secenekler').innerHTML = '';
+  document.getElementById('sinav-sonuc-panel').style.display = 'none';
+  document.getElementById('sinav-ilerleme-bar').style.width = '0%';
+  modal.classList.add('open');
+  try {
+    const r = await fetch('/panel/isg/zorunlu-egitim-sorular', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({zon_id, baslik})
+    });
+    const d = await r.json();
+    if (!d.basarili) throw new Error(d.hata || 'Bilinmeyen hata');
+    sinavBaslat(d.sorular);
+  } catch(e) {
+    document.getElementById('sinav-soru-metin').textContent = 'Sorular yüklenemedi: ' + e.message;
+  }
+}
+
+function sinavBaslat(sorular) {
+  _sinavSorular = sorular;
+  _sinavIdx = 0;
+  _sinavDogru = 0;
+  _sinavCevaplar = new Array(sorular.length).fill(null);
+  sinavSoruGoster(0);
+}
+
+function sinavSoruGoster(idx) {
+  const s = _sinavSorular[idx];
+  if (!s) return;
+  const toplam = _sinavSorular.length;
+  document.getElementById('sinav-soru-no').textContent = `Soru ${idx+1}/${toplam}`;
+  document.getElementById('sinav-soru-metin').textContent = s.soru;
+  document.getElementById('sinav-ilerleme-bar').style.width = ((idx / toplam) * 100) + '%';
+  document.getElementById('sinav-sonuc-panel').style.display = 'none';
+  const sec = document.getElementById('sinav-secenekler');
+  sec.innerHTML = s.secenekler.map((opt, j) => `
+    <button class="sinav-secenek" onclick="sinavCevapla(${idx}, ${j}, this)">
+      <span style="display:inline-block;width:22px;height:22px;border-radius:50%;border:2px solid var(--border);margin-right:10px;vertical-align:middle;background:${_sinavCevaplar[idx]===j?'var(--accent)':'transparent'};border-color:${_sinavCevaplar[idx]===j?'var(--accent)':'var(--border)'};"></span>
+      ${opt}
+    </button>`).join('');
+}
+
+function sinavCevapla(soruIdx, cevapIdx, btn) {
+  // Seçeneği kaydet
+  _sinavCevaplar[soruIdx] = cevapIdx;
+  // Görsel güncelle
+  document.querySelectorAll('.sinav-secenek').forEach((b, j) => {
+    const dot = b.querySelector('span');
+    if (j === cevapIdx) {
+      dot.style.background = 'var(--accent)';
+      dot.style.borderColor = 'var(--accent)';
+    } else {
+      dot.style.background = 'transparent';
+      dot.style.borderColor = 'var(--border)';
+    }
+  });
+  // 600ms sonra sıradaki soruya veya bitir
+  setTimeout(() => {
+    const toplam = _sinavSorular.length;
+    if (soruIdx + 1 < toplam) {
+      _sinavIdx = soruIdx + 1;
+      sinavSoruGoster(_sinavIdx);
+    } else {
+      sinavBitir();
+    }
+  }, 600);
+}
+
+async function sinavBitir() {
+  let dogru = 0;
+  _sinavSorular.forEach((s, i) => {
+    if (_sinavCevaplar[i] === s.dogru_idx) dogru++;
+  });
+  const toplam = _sinavSorular.length;
+  const puan = Math.round((dogru / toplam) * 100);
+  const gecti = puan >= 70;
+
+  // İlerleme çubuğu %100
+  document.getElementById('sinav-ilerleme-bar').style.width = '100%';
+  document.getElementById('sinav-soru-no').textContent = `${toplam}/${toplam} tamamlandı`;
+  document.getElementById('sinav-secenekler').innerHTML = '';
+  document.getElementById('sinav-soru-metin').textContent = '';
+
+  // Sonuç paneli
+  const tekrarBtn = document.getElementById('sinav-tekrar-btn');
+  if (tekrarBtn) tekrarBtn.style.display = gecti ? 'none' : 'inline-block';
+  const sonucKutu = document.getElementById('sinav-sonuc-kutu');
+  sonucKutu.style.background = gecti ? '#e8f7f0' : '#fdecea';
+  sonucKutu.innerHTML = `
+    <div style="font-size:42px;margin-bottom:8px">${gecti ? '🎉' : '📚'}</div>
+    <div style="font-size:32px;font-weight:800;font-family:'Syne',sans-serif;color:${gecti?'#0a6640':'var(--red)'}">${puan}<span style="font-size:16px">/100</span></div>
+    <div style="font-size:16px;font-weight:600;margin-top:6px;color:${gecti?'#0a6640':'var(--red)'}">
+      ${gecti ? '✅ Eğitim Onaylandı' : '❌ Geçer puan alınamadı'}
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-top:6px">${dogru}/${toplam} doğru &nbsp;·&nbsp; Min. geçer puan: 70</div>
+    ${!gecti ? `<div style="font-size:12px;color:#856404;margin-top:8px;background:#fff8e6;padding:6px 12px;border-radius:6px">Eğitimi tekrar alıp sınava girebilirsiniz.</div>` : ''}`;
+  document.getElementById('sinav-sonuc-panel').style.display = 'block';
+
+  // Sonucu backend'e kaydet
+  if (_sinavAlici && _sinavEgitim) {
+    try {
+      await fetch('/panel/isg/zorunlu-egitim-sinav-sonuc', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          firma_id: aktifFirma,
+          telegram_id: _sinavAlici.telegram_id,
+          ad_soyad: _sinavAlici.ad_soyad,
+          gorev: _sinavAlici.gorev,
+          zon_id: _sinavEgitim.zon_id,
+          baslik: _sinavEgitim.baslik,
+          puan, gecti
+        })
+      });
+    } catch(e) {}
+    if (gecti) setTimeout(() => zeYukle(), 1800);
+  }
+}
+
+function sinavModalKapat() {
+  const modal = document.getElementById('sinav-modal');
+  if (modal) modal.classList.remove('open');
+  _sinavSorular = []; _sinavAlici = null; _sinavEgitim = null; _sinavVeri = null;
+}
+
 // ── ISG Modülü Fonksiyonları (panel_routes.py'den taşındı) ────────
 // ── ISG Panel JavaScript ───────────────────────────────────────
 
 function isgAltSekme(ad, el) {
-  document.querySelectorAll('.isg-alt-panel').forEach(p => p.style.display = 'none');
-  document.querySelectorAll('.isg-alt-tab').forEach(t => {
-    t.classList.remove('active');
-    t.style.borderBottomColor = 'transparent';
-    t.style.color = '#666';
-  });
-  document.getElementById('isg-panel-' + ad).style.display = 'block';
-  el.classList.add('active');
-  el.style.color = 'var(--text)';
-  el.style.borderBottomColor = 'var(--accent)';
+  // Yeni sidebar düzeni — tüm içerikleri gizle
+  document.querySelectorAll('.isg-panel-icerik').forEach(p => p.classList.remove('aktif'));
+  document.querySelectorAll('.isg-sidebar-item').forEach(t => t.classList.remove('active'));
+  // Eski sistemle uyumluluk
+  document.querySelectorAll('.isg-ap').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.isg-alt-panel').forEach(p => { p.style.display = 'none'; });
+  // Seçilen paneli göster
+  const panel = document.getElementById('isg-panel-' + ad);
+  if (panel) { panel.classList.add('aktif'); panel.style.display = ''; }
+  // Sidebar item aktif yap
+  if (el) el.classList.add('active');
+  // Veri yükle
   if (ad === 'dashboard') dbYukle();
   if (ad === 'atamalar') { isgAtamalariYukle(); isgFirmalariYukle('isg-atama-firma-filtre'); }
-  if (ad === 'firma-detay') isgFirmalariYukle('isg-detay-firma-sec');
-  if (ad === 'audit') isgAuditYukle();
+  if (ad === 'firma-detay') {
+    isgFirmalariYukle('isg-detay-firma-sec');
+    if (aktifFirma) setTimeout(() => isgDetayYukle(aktifFirma), 350);
+  }
+  if (ad === 'audit') { isgAuditYukle(); isgFirmalariYukle('isg-audit-firma-filtre'); }
   if (ad === 'sure-hesap') isgSureHesapBaslat();
   if (ad === 'personel-rapor') prYukle();
   if (ad === 'zorunlu-egitim') zeYukle();
@@ -3307,28 +3536,28 @@ function dbRender(d) {
 
 // ── ISG Süre Hesaplama ─────────────────────────────────────────
 function isgSureHesapBaslat() {
-  // Mevcut firma_detay'dan tehlike sınıfı ve çalışan sayısı varsa doldur
+  // Mevcut firma_detay'dan tehlike sınıfı ve aktif çalışan sayısını doldur
   const tehlikeEl = document.getElementById('sh-tehlike');
   const calisanEl = document.getElementById('sh-calisan');
-  if (!tehlikeEl.value && aktifFirma) {
-    fetch('/panel/isg/firma-detay?firma_id=' + encodeURIComponent(aktifFirma))
-      .then(r => r.ok ? r.json() : {})
-      .then(d => {
-        if (d.tehlike_sinifi) tehlikeEl.value = d.tehlike_sinifi;
-        if (d.calisan_sayisi) calisanEl.value = d.calisan_sayisi;
-        // Atanmış uzman sınıfını bul
-        return fetch('/panel/isg/atamalar?firma_id=' + encodeURIComponent(aktifFirma));
-      })
-      .then(r => r && r.ok ? r.json() : [])
-      .then(atamalar => {
-        const aktif = (atamalar || []).find(a => !a.bitis_tarihi && a.tip === 'is_guvenligi_uzmani');
-        if (aktif && aktif.uzman_sinifi) {
-          document.getElementById('sh-uzman-sinif').value = aktif.uzman_sinifi;
-        }
-        shHesapla();
-      })
-      .catch(() => {});
-  }
+  if (!aktifFirma) return;
+  // Her zaman aktif çalışan sayısını çek (ISG_FirmaDetay'daki statik değil)
+  Promise.all([
+    fetch('/panel/isg/firma-detay?firma_id=' + encodeURIComponent(aktifFirma)).then(r => r.ok ? r.json() : {}),
+    fetch('/panel/api/calisanlar?firma_id=' + encodeURIComponent(aktifFirma)).then(r => r.ok ? r.json() : {calisanlar:[]}),
+    fetch('/panel/isg/atamalar?firma_id=' + encodeURIComponent(aktifFirma)).then(r => r.ok ? r.json() : [])
+  ]).then(([detay, calisanData, atamalar]) => {
+    if (detay.tehlike_sinifi) tehlikeEl.value = detay.tehlike_sinifi;
+    // Aktif çalışan sayısını sheets'teki gerçek değerden al
+    const aktifSayi = (calisanData.calisanlar || []).filter(c => c.aktif !== false && c.aktif !== '0').length;
+    if (aktifSayi > 0) calisanEl.value = aktifSayi;
+    else if (detay.calisan_sayisi) calisanEl.value = detay.calisan_sayisi;
+    // Atanmış uzman sınıfını bul
+    const aktifAtama = (atamalar || []).find(a => !a.bitis_tarihi && a.tip === 'is_guvenligi_uzmani');
+    if (aktifAtama && aktifAtama.uzman_sinifi) {
+      document.getElementById('sh-uzman-sinif').value = aktifAtama.uzman_sinifi;
+    }
+    shHesapla();
+  }).catch(() => { shHesapla(); });
 }
 
 function shHesapla() {
@@ -3723,7 +3952,7 @@ function zeRenderListe(calisanlar) {
   if (topluBtn) topluBtn.style.display = filtreli.some(c=>c.eksik_sayisi>0) ? 'block' : 'none';
 
   if (!filtreli.length) {
-    liste.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>Bu filtrede çalışan yok</div>';
+    liste.innerHTML = '<div class="empty"><div class="empty-icon">\u2705</div>Bu filtrede \u00e7al\u0131\u015fan yok</div>';
     return;
   }
 
@@ -3734,52 +3963,59 @@ function zeRenderListe(calisanlar) {
     const egitimSatirlari = eksikEgitimler.map(e => {
       const d = zeDurumRenk[e.durum] || zeDurumRenk['hic_alinmadi'];
       const katBg = zeKatRenk[e.kategori] || '#f1efe8';
-      const periyotLabel = e.periyot_ay === 0 ? 'Bir kez' : e.periyot_ay === 1 ? 'Aylık' : `${e.periyot_ay} ayda bir`;
-      const kalanLabel   = e.kalan_gun != null
-        ? (e.kalan_gun < 0 ? `${Math.abs(e.kalan_gun)} gün geçti` : `${e.kalan_gun} gün kaldı`)
-        : '';
-      const gonderBtn = c.telegram_id
-        ? `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 10px"
-            onclick="zeGonder(['${c.telegram_id}'],'${e.zon_id}','${e.baslik.replace(/'/g,"\'")}')">
-            📤 Gönder</button>`
-        : `<span style="font-size:11px;color:var(--muted)">Telegram yok</span>`;
+      const periyotLabel = e.periyot_ay === 0 ? 'Bir kez' : e.periyot_ay === 1 ? 'Ayl\u0131k' : (e.periyot_ay + ' ayda bir');
+      const kalanLabel = e.kalan_gun != null
+        ? (e.kalan_gun < 0 ? Math.abs(e.kalan_gun) + ' g\u00fcn ge\u00e7ti' : e.kalan_gun + ' g\u00fcn kald\u0131') : '';
+      const adSafe = (c.ad_soyad||'').replace(/\'/g, "&#39;");
+      const baslikSafe = (e.baslik||'').replace(/\'/g, "&#39;");
+      const gorevSafe = (c.gorev||'').replace(/\'/g, "&#39;");
+      const sinavBtn = c.telegram_id
+        ? `<button class="btn btn-dark btn-sm" style="font-size:11px;padding:3px 9px"
+            onclick="zeGonderVeSinav(['${c.telegram_id}'],'${e.zon_id}','${baslikSafe}','${adSafe}','${gorevSafe}')">
+            \ud83d\udcdd S\u0131nav</button>
+           <button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 9px"
+            onclick="zeGonder(['${c.telegram_id}'],'${e.zon_id}','${baslikSafe}')">
+            \ud83d\udce4</button>`
+        : '<span style="font-size:11px;color:var(--muted)">TG yok</span>';
 
       return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:${d.bg};border-radius:8px">
-        <span style="font-size:14px;color:${d.c};flex-shrink:0">${d.ikon}</span>
+        <span style="font-size:16px;color:${d.c};flex-shrink:0;width:20px;text-align:center">${d.ikon}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.baslik}</div>
-          <div style="font-size:11px;color:var(--muted)">
-            <span style="background:${katBg};padding:1px 6px;border-radius:4px;margin-right:6px">${zeKatYazi[e.kategori]||e.kategori}</span>
-            ${periyotLabel}
-            ${e.son_alinma ? ` · Son: ${e.son_alinma}` : ''}
-            ${kalanLabel ? ` · ${kalanLabel}` : ''}
+          <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.baslik}</div>
+          <div style="font-size:11px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">
+            <span style="background:${katBg};padding:1px 6px;border-radius:4px">${zeKatYazi[e.kategori]||e.kategori}</span>
+            <span>${periyotLabel}</span>
+            ${e.son_alinma ? '<span>Son: '+e.son_alinma+'</span>' : ''}
+            ${kalanLabel ? '<span style="color:'+d.c+'">'+kalanLabel+'</span>' : ''}
           </div>
         </div>
-        ${gonderBtn}
+        <div style="display:flex;gap:4px;flex-shrink:0">${sinavBtn}</div>
       </div>`;
     }).join('');
 
-    const tamamText = tamam.length ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ ${tamam.length} eğitim güncel</div>` : '';
+    const tamamText = tamam.length
+      ? `<div style="font-size:11px;color:var(--green);padding:6px 10px;background:#f0faf5;border-radius:6px;margin-top:6px">\u2713 ${tamam.map(e=>e.baslik).join(' \u00b7 ')}</div>`
+      : '';
     const rozetRenk = c.eksik_sayisi > 0 ? 'var(--red)' : 'var(--green)';
     const rozetBg   = c.eksik_sayisi > 0 ? '#fdecea' : '#e8f7f0';
 
     return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:${eksikEgitimler.length?'1px solid var(--border)':'none'}">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;${eksikEgitimler.length?'border-bottom:1px solid var(--border)':''}">
         <input type="checkbox" class="ze-chk" value="${c.telegram_id}" style="width:16px;height:16px;flex-shrink:0">
-        <div style="flex:1">
+        <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px">${c.ad_soyad}</div>
-          <div style="font-size:12px;color:var(--muted)">${c.gorev||'Görev belirtilmemiş'}</div>
+          <div style="font-size:12px;color:var(--muted)">${c.gorev||'G\u00f6rev belirtilmemi\u015f'}</div>
         </div>
-        <span style="background:${rozetBg};color:${rozetRenk};border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600">
-          ${c.eksik_sayisi > 0 ? `${c.eksik_sayisi} eksik` : 'Uyumlu'}
+        <span style="background:${rozetBg};color:${rozetRenk};border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;flex-shrink:0">
+          ${c.eksik_sayisi > 0 ? c.eksik_sayisi+' eksik' : 'Uyumlu \u2713'}
         </span>
-        ${c.eksik_sayisi > 0 ? `<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="zeGonder(['${c.telegram_id}'],null,'Zorunlu İSG Eğitimleri')">📤 Hepsini Gönder</button>` : ''}
+        ${c.eksik_sayisi > 0 ? `<button class="btn btn-primary btn-sm" style="font-size:11px;flex-shrink:0"
+          onclick="zeGonder(['${c.telegram_id}'],null,'Zorunlu \u0130SG E\u011fitimleri')">\ud83d\udce4 T\u00fcm\u00fcn\u00fc G\u00f6nder</button>` : ''}
       </div>
       ${eksikEgitimler.length ? `<div style="padding:10px 14px">${egitimSatirlari}${tamamText}</div>` : ''}
     </div>`;
   }).join('');
 }
-
 async function zeGonder(telegramIdler, egitimId, konu) {
   if (!telegramIdler || !telegramIdler.length) { alert('Çalışan seçin'); return; }
   const onay = confirm(`${telegramIdler.length} kişiye "${konu}" eğitimi gönderilecek. Onaylıyor musunuz?`);
@@ -4296,7 +4532,7 @@ def api_kayitlar():
         ozet[konu]["toplam"]+=1
         if k.get("durum") in ("GEÇTİ","GECTI"): ozet[konu]["gecti"]+=1
         else: ozet[konu]["kaldi"]+=1
-    return jsonify({"kayitlar":f,"egitim_ozet":ozet})
+    return jsonify({"kayitlar":f,"egitim_ozet":ozet,"toplam":len(f)})
 
 @app.route("/panel/api/calisanlar")
 def api_calisanlar():
