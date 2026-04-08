@@ -424,8 +424,15 @@ def firma_detay_kaydet_route():
     try:
         from isg.firma_detay import firma_detay_kaydet
         from isg.audit_log import log_yaz
-        firma_detay_kaydet(veri.get("firma_id", ""), veri)
-        log_yaz("firma_detay_guncelle", veri.get("firma_id", ""), "Firma ISG detayı güncellendi")
+        fid = veri.get("firma_id", "")
+        firma_detay_kaydet(
+            fid,
+            veri.get("sgk_sicil_no") or veri.get("sgk_no", ""),
+            veri.get("nace_kodu", ""),
+            veri.get("tehlike_sinifi", ""),
+            str(veri.get("calisan_sayisi", "")),
+        )
+        log_yaz("firma_detay_guncelle", fid, "Firma ISG detayı güncellendi")
         return jsonify({"basarili": True})
     except Exception as e:
         return jsonify({"basarili": False, "hata": str(e)})
