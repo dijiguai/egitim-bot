@@ -288,6 +288,32 @@ async def sinav_tamamla_direkt(context, user_id, durum, calisan=None, guncelle=N
         from durum import tamamlandi_kaydet
         if gecti:
             tamamlandi_kaydet(user_id, egitim_id)
+        # ISG Eğitim Kayıt sistemine de yaz
+        try:
+            from isg.egitim_kayit import kayit_ekle as isg_kayit_ekle
+            from firma_manager import grup_id_den_firma
+            from config import GRUP_ID
+            firma_id = "varsayilan"
+            try:
+                if GRUP_ID:
+                    fid, _ = grup_id_den_firma(GRUP_ID)
+                    firma_id = fid or "varsayilan"
+            except Exception:
+                pass
+            drive_link = durum.get("drive_link", "")
+            isg_kayit_ekle(
+                telegram_id=str(user_id),
+                ad_soyad=calisan["ad_soyad"],
+                egitim_id=egitim_id,
+                egitim_baslik=egitim.get("baslik", egitim_id),
+                puan=puan,
+                gecti=gecti,
+                deneme_no=deneme_no,
+                firma_id=firma_id,
+                drive_link=drive_link,
+            )
+        except Exception as _isg_e:
+            logger.warning(f"ISG eğitim kayıt hatası: {_isg_e}")
     except Exception as e:
         logger.error(f"Kayit hatasi: {e}")
 
