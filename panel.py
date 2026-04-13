@@ -1774,7 +1774,8 @@ function renderCalisanlar(calisanlar) {
         <button class="btn btn-primary btn-sm" onclick="egitimSecModalAc(${c.telegram_id},'${adSafe}',this)" ${c.telegram_id<=0?'disabled':''}>📤 Eğitim Gönder</button>
         <button class="btn btn-orange btn-sm" onclick="ekstraHakVer(${c.telegram_id},'${adSafe}',this)" ${c.telegram_id<=0?'disabled':''}>🔁 Tekrar İzni</button>
         <button class="btn btn-green btn-sm" onclick="izinModalAc(${c.telegram_id},'${adSafe}')">🏖 İzin</button>
-        <button class="btn btn-dark btn-sm" onclick="calisanAltSekme('zorunlu', document.getElementById('cs-tab-zorunlu'));setTimeout(()=>zeFiltreCalisanGoster('${c.telegram_id}'),300)" ${c.telegram_id<=0?'disabled':''} title="Bu çalışanın zorunlu eğitimlerini göster">⚠️ Eğitimler</button>
+        <button class="btn btn-dark btn-sm" onclick="isgEgitimDetayGoster('${c.telegram_id}','${adSafe}')" ${c.telegram_id<=0?'disabled':''} title="ISG eğitim geçmişi ve belgeler">📋 ISG Geçmiş</button>
+        <button class="btn btn-dark btn-sm" onclick="calisanAltSekme('zorunlu', document.getElementById('cs-tab-zorunlu'));setTimeout(()=>zeFiltreCalisanGoster('${c.telegram_id}'),300)" ${c.telegram_id<=0?'disabled':''} title="Zorunlu eğitim durumu">⚠️ Zorunlu</button>
         <button class="btn btn-dark btn-sm" onclick="calisanDuzenle(${c.telegram_id},'${adSafe}','${gorevSafe}','${c.dogum_tarihi}')">✏️</button>
         <button class="btn btn-dark btn-sm" onclick="arsivleModalAc(${c.telegram_id},'${adSafe}')">📦</button>
         <button class="btn btn-red btn-sm" onclick="silModalAc(${c.telegram_id},'${adSafe}')">🗑</button>
@@ -4439,6 +4440,88 @@ async function zeGonderModalKaydet(zon_id, baslik) {
   await zeGonder(secili, zon_id, baslik);
 }
 
+
+// ── ISG Eğitim Kayıt Detayı ──────────────────────────────────
+let _isgKayitData = [];
+
+function isgKayitModalKapat() {
+  var m = document.getElementById('isg-kayit-modal');
+  if (m) m.remove();
+}
+
+function isgBelgeYukleClick(idx) {
+  if (!_isgKayitData[idx]) return;
+  var k = _isgKayitData[idx];
+  imzaliBelgeYukleModal(k.kayit_id, k.ad_soyad_display);
+}
+
+async function isgEgitimDetayGoster(telegram_id, ad_soyad) {
+  var eskiModal = document.getElementById('isg-kayit-modal');
+  if (eskiModal) eskiModal.remove();
+  _isgKayitData = [];
+
+  var modal = document.createElement('div');
+  modal.id = 'isg-kayit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = '<div style="background:var(--card);border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25)">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+    + '<div><div style="font-weight:700;font-size:15px">ISG Egitim Gecmisi</div>'
+    + '<div style="font-size:12px;color:var(--muted)">' + ad_soyad + '</div></div>'
+    + '<button onclick="isgKayitModalKapat()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">x</button>'
+    + '</div><div id="isg-kayit-liste"><div class="loading"><div class="spinner"></div></div></div></div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) isgKayitModalKapat(); });
+
+  try {
+    var fid = (typeof aktifFirma !== 'undefined' && aktifFirma) ? aktifFirma : 'varsayilan';
+    var r = await fetch('/panel/api/calisan-isg-kayitlar?telegram_id=' + encodeURIComponent(telegram_id) + '&firma_id=' + encodeURIComponent(fid));
+    var kayitlar = await r.json();
+    var listeEl = document.getElementById('isg-kayit-liste');
+    if (!kayitlar || !kayitlar.length) {
+      listeEl.innerHTML = '<div class="empty"><div class="empty-icon">&#128203;</div>Henuz ISG egitim kaydi yok.</div>';
+      return;
+    }
+    _isgKayitData = kayitlar.map(function(k) { return Object.assign({}, k, {ad_soyad_display: ad_soyad}); });
+    var rows = kayitlar.map(function(k, i) {
+      var gectiHtml = k.gecti
+        ? '<span style="background:#e8f7f0;color:var(--green);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">Gecti</span>'
+        : '<span style="background:#fdecea;color:var(--red);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">Kaldi</span>';
+      var imzaHtml = '';
+      if (k.gecti) {
+        if (k.imzali_belge_link) {
+          imzaHtml = '<a href="' + k.imzali_belge_link + '" target="_blank" style="color:var(--green);font-size:11px">Imzali Belge</a>';
+        } else {
+          imzaHtml = '<button class="btn btn-dark btn-sm" style="font-size:11px" onclick="isgBelgeYukleClick(' + i + ')">Belge Yukle</button>';
+        }
+      }
+      var matHtml = k.drive_link ? ' <a href="' + k.drive_link + '" target="_blank" style="color:var(--accent);font-size:11px">Materyal</a>' : '';
+      return '<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px">'
+        + '<div><div style="font-size:13px;font-weight:600">' + (k.egitim_baslik || '') + '</div>'
+        + '<div style="font-size:11px;color:var(--muted);margin-top:3px">' + (k.tarih || '') + ' &middot; ' + (k.deneme_no || 1) + '. deneme &middot; Puan: ' + (k.puan || 0) + matHtml + '</div></div>'
+        + '<div style="display:flex;gap:6px;align-items:center">' + gectiHtml + imzaHtml + '</div>'
+        + '</div></div>';
+    });
+    listeEl.innerHTML = rows.join('');
+  } catch(err) {
+    var el = document.getElementById('isg-kayit-liste');
+    if (el) el.innerHTML = '<div class="empty"><div class="empty-icon">&#9888;</div>Yuklenemedi</div>';
+  }
+}
+
+function imzaliBelgeYukleModal(kayit_id, ad_soyad) {
+  var link = prompt(ad_soyad + ' icin imzali belge Drive linkini girin:');
+  if (!link) return;
+  if (!link.startsWith('http')) { alert('Gecerli bir URL girin'); return; }
+  fetch('/panel/api/imzali-belge-yukle', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({kayit_id: kayit_id, belge_link: link})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.basarili) { alert('Imzali belge kaydedildi!'); isgKayitModalKapat(); }
+    else alert('Hata: ' + (d.hata || ''));
+  }).catch(function() { alert('Baglanti hatasi'); });
+}
+
 function calisanAltSekme(ad, el) {
   // Sub-tab switching for Çalışanlar tab
   const panelListe   = document.getElementById('cs-panel-liste');
@@ -4733,6 +4816,50 @@ async function takvimKatilmayanlaraGonder(egitimId, idler, btn) {
 </body>
 </html>
 """
+
+@app.route("/panel/api/calisan-isg-kayitlar")
+def api_calisan_isg_kayitlar():
+    """Çalışanın ISG eğitim kayıtlarını döner."""
+    if not session.get("panel_giris"): return jsonify([]), 401
+    telegram_id = request.args.get("telegram_id", "")
+    firma_id = request.args.get("firma_id", "varsayilan")
+    if not telegram_id: return jsonify([]), 400
+    try:
+        from isg.egitim_kayit import calisan_kayitlari
+        return jsonify(calisan_kayitlari(telegram_id, firma_id))
+    except Exception as e:
+        return jsonify([])
+
+
+@app.route("/panel/api/imzali-belge-yukle", methods=["POST"])
+def api_imzali_belge_yukle():
+    """İmzalı belge Drive linkini kaydeder."""
+    if not session.get("panel_giris"): return jsonify({"basarili": False}), 401
+    veri = request.get_json()
+    kayit_id = veri.get("kayit_id", "")
+    belge_link = veri.get("belge_link", "").strip()
+    if not kayit_id or not belge_link:
+        return jsonify({"basarili": False, "hata": "kayit_id ve belge_link zorunlu"})
+    try:
+        from isg.egitim_kayit import imzali_belge_guncelle
+        ok = imzali_belge_guncelle(kayit_id, belge_link)
+        return jsonify({"basarili": ok})
+    except Exception as e:
+        return jsonify({"basarili": False, "hata": str(e)})
+
+
+@app.route("/panel/api/firma-egitim-ozeti")
+def api_firma_egitim_ozeti():
+    """Firma bazlı ISG eğitim tamamlanma özeti."""
+    if not session.get("panel_giris"): return jsonify({}), 401
+    firma_id = request.args.get("firma_id", "varsayilan")
+    try:
+        from isg.egitim_kayit import firma_egitim_ozeti
+        return jsonify(firma_egitim_ozeti(firma_id))
+    except Exception as e:
+        return jsonify({})
+
+
 
 @app.route("/panel/version")
 def panel_version():
