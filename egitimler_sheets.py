@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SEKME = "Egitimler"
 # sira: eğitim gönderim sırası (1,2,3...), boşsa pozisyon sırası kullanılır
-SUTUNLAR = ["id", "baslik", "tur", "sure", "metin", "sorular_json", "firmalar", "sira"]
+SUTUNLAR = ["id", "baslik", "tur", "sure", "metin", "sorular_json", "firmalar", "sira", "drive_link"]
 
 _cache = None
 
@@ -58,7 +58,7 @@ def tum_egitimler(sirali=True) -> dict:
     global _cache
     try:
         s, sid = _servis()
-        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:H").execute()
+        r = s.values().get(spreadsheetId=sid, range=f"{SEKME}!A2:I").execute()
         satirlar = r.get("values", [])
         egitimler_liste = []
         for satir in satirlar:
@@ -78,14 +78,17 @@ def tum_egitimler(sirali=True) -> dict:
             except:
                 sira = 9999
 
+            drive_link = satir[8].strip() if len(satir) > 8 else ""
+
             egitimler_liste.append((sira, eid, {
-                "baslik":   satir[1] if len(satir) > 1 else "",
-                "tur":      satir[2] if len(satir) > 2 else "",
-                "sure":     satir[3] if len(satir) > 3 else "",
-                "metin":    satir[4] if len(satir) > 4 else "",
-                "sorular":  sorular,
-                "firmalar": [f.strip() for f in firmalar_str.split(",") if f.strip()] if firmalar_str else [],
-                "sira":     sira
+                "baslik":     satir[1] if len(satir) > 1 else "",
+                "tur":        satir[2] if len(satir) > 2 else "",
+                "sure":       satir[3] if len(satir) > 3 else "",
+                "metin":      satir[4] if len(satir) > 4 else "",
+                "sorular":    sorular,
+                "firmalar":   [f.strip() for f in firmalar_str.split(",") if f.strip()] if firmalar_str else [],
+                "sira":       sira,
+                "drive_link": drive_link,
             }))
 
         if sirali:
@@ -100,7 +103,7 @@ def tum_egitimler(sirali=True) -> dict:
 
 
 def egitim_ekle(eid: str, baslik: str, tur: str, sure: str, metin: str,
-                sorular: list, firmalar: list = None, sira: int = None):
+                sorular: list, firmalar: list = None, sira: int = None, drive_link: str = ""):
     _baslik_kontrol()
     s, sid = _servis()
     firmalar_str = ",".join(firmalar) if firmalar else ""
@@ -109,7 +112,7 @@ def egitim_ekle(eid: str, baslik: str, tur: str, sure: str, metin: str,
         mevcut = tum_egitimler(sirali=True)
         siralar = [e.get("sira", 0) for e in mevcut.values() if e.get("sira", 9999) < 9999]
         sira = (max(siralar) + 1) if siralar else 1
-    deger = [[eid, baslik, tur, sure, metin, json.dumps(sorular, ensure_ascii=False), firmalar_str, str(sira)]]
+    deger = [[eid, baslik, tur, sure, metin, json.dumps(sorular, ensure_ascii=False), firmalar_str, str(sira), drive_link]]
     s.values().append(spreadsheetId=sid, range=f"{SEKME}!A1",
         valueInputOption="RAW", insertDataOption="INSERT_ROWS",
         body={"values": deger}).execute()
