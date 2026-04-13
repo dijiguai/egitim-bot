@@ -54,6 +54,12 @@ async def buton_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await egitim_baslat(update, context, user_id, egitim_id)
             return
 
+        if data.startswith("sinav_baslat:"):
+            # Drive'dan materyali okudu, şimdi sınav başlasın
+            egitim_id = data.split(":", 1)[1]
+            await sinav_baslat(update, context, user_id, egitim_id)
+            return
+
         if data.startswith("cevap:"):
             p = data.split(":")
             await cevap_isle(update, context, user_id, int(p[1]), int(p[2]))
@@ -101,23 +107,47 @@ async def egitim_baslat(update, context, user_id, egitim_id):
         calisan = None
 
     if calisan:
+        drive_link = egitim.get("drive_link", "")
+        deneme_txt = f" ({deneme_no}. deneme)" if deneme_no > 1 else ""
+
         kullanici_durum[user_id] = {
             "egitim_id": egitim_id,
-            "sorular": egitim["sorular"],
+            "sorular": egitim.get("sorular", []),
             "soru_idx": 0,
             "dogru_sayisi": 0,
             "kimlik_bekleniyor": False,
             "dogum_dogrulama": False,
             "kimlik_dogrulandi": True,
             "kimlik_deneme": 0,
-            "deneme_no": deneme_no
+            "deneme_no": deneme_no,
+            "drive_link": drive_link,
+            "egitim_baslik": egitim.get("baslik", egitim_id),
         }
-        deneme_txt = f" ({deneme_no}. deneme)" if deneme_no > 1 else ""
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=egitim["metin"] + f"\n\n_{egitim['sure']}{deneme_txt}_",
-            parse_mode="Markdown"
-        )
+
+        if drive_link:
+            # Drive linkli eğitim: önce materyali göster, sonra sınav butonu
+            metin = egitim.get("metin", "") or ""
+            metin_kisim = f"\n\n{metin}" if metin else ""
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    f"📚 *{egitim.get('baslik', 'Eğitim')}{deneme_txt}*\n\n"
+                    f"Aşağıdaki butona tıklayarak eğitim materyalini inceleyin, "
+                    f"ardından *Okudum, Sınava Geç* butonuna basın.{metin_kisim}"
+                ),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📖 Eğitim Materyalini Aç", url=drive_link)],
+                    [InlineKeyboardButton("✅ Okudum, Sınava Geç", callback_data=f"sinav_baslat:{egitim_id}")]
+                ])
+            )
+        else:
+            # Eski akış: metin göster, soru-cevap başlat
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=egitim.get("metin", "") + f"\n\n_{egitim.get('sure','')}{deneme_txt}_",
+                parse_mode="Markdown"
+            )
         await soru_gonder(context, user_id, 0, egitim["sorular"])
     else:
         kullanici_durum[user_id] = {
@@ -139,6 +169,36 @@ async def egitim_baslat(update, context, user_id, egitim_id):
             ),
             parse_mode="Markdown"
         )
+
+
+async def sinav_baslat(update, context, user_id, egitim_id):
+    """Drive materyali okunduktan sonra sınav soruları gönder."""
+    from handlers.kayit_handler import kullanici_durum
+    durum = kullanici_durum.get(user_id, {})
+    if durum.get("egitim_id") != egitim_id:
+        # Durum yoksa yeni başlat
+        await egitim_baslat(update, context, user_id, egitim_id)
+        return
+
+    sorular = durum.get("sorular", [])
+    if not sorular:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Bu eğitim için sınav sorusu tanımlanmamış. Eğitim tamamlandı sayıldı."
+        )
+        return
+
+    # İlk soruyu gönder
+    durum["soru_idx"] = 0
+    durum["dogru_sayisi"] = 0
+    kullanici_durum[user_id] = durum
+
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=f"📝 *Sınav Başlıyor* — {len(sorular)} soru, geçme notu: %{GECME_NOTU}",
+        parse_mode="Markdown"
+    )
+    await soru_gonder(update, context, user_id)
 
 
 async def soru_gonder(context, user_id, idx, sorular):
